@@ -1,20 +1,22 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  默认使用中文撰写 OpenSpec 文档，包括 proposal、design、tasks 和 specs。
+  保留 OpenSpec 解析所需的结构化关键字，例如 ADDED Requirements、Requirement、Scenario、WHEN、THEN 和任务复选框格式。
+  项目技术栈倾向于 Vue 3、TypeScript、Vite、Vue Router、Pinia、Element Plus、Axios 和 vue-i18n。
+  项目领域是内部运营 / 管理员使用的管理后台基础框架。
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
+rules:
+  proposal:
+    - 使用中文描述变更动机、范围、能力和影响。
+    - capability 标识保持 kebab-case 英文命名。
+  design:
+    - 使用中文描述架构决策、取舍、风险和迁移计划。
+    - 保留接口路径、代码片段、类型名和配置名的原始英文。
+  specs:
+    - 使用中文描述需求和场景。
+    - 保留 OpenSpec 结构标记：ADDED Requirements、Requirement、Scenario、WHEN、THEN。
+    - capability 目录名保持 kebab-case 英文命名。
+  tasks:
+    - 使用中文描述任务。
+    - 保留 `- [ ]` 任务复选框格式和编号。
