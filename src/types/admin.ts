@@ -1,7 +1,7 @@
 import type { Component } from "vue";
 
 export interface ApiResponse<T = unknown> {
-  code: number;
+  code: number | string;
   message: string;
   data: T;
 }

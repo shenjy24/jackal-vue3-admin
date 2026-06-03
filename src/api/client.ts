@@ -2,14 +2,16 @@ import axios, { AxiosError, type AxiosRequestConfig } from "axios";
 import { ElMessage } from "element-plus";
 import type { ApiResponse } from "@/types/admin";
 
-export const API_SUCCESS_CODE = 0;
-export const API_UNAUTHORIZED_CODES = [401, 10001];
-export const API_FORBIDDEN_CODES = [403, 10003];
+type ApiCode = number | string;
+
+export const API_SUCCESS_CODES: ApiCode[] = [2000, "2000"];
+export const API_UNAUTHORIZED_CODES: ApiCode[] = [401, 10001];
+export const API_FORBIDDEN_CODES: ApiCode[] = [403, 10003];
 
 export class ApiClientError extends Error {
-  code: number;
+  code: ApiCode;
 
-  constructor(code: number, message: string) {
+  constructor(code: ApiCode, message: string) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
@@ -33,11 +35,11 @@ apiClient.interceptors.response.use(
   (response) => {
     const body = response.data as ApiResponse;
 
-    if (!body || typeof body.code !== "number") {
+    if (!body || (typeof body.code !== "number" && typeof body.code !== "string")) {
       return response.data;
     }
 
-    if (body.code === API_SUCCESS_CODE) {
+    if (API_SUCCESS_CODES.includes(body.code)) {
       return body.data;
     }
 
