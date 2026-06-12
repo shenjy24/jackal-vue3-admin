@@ -2,7 +2,6 @@
 import { reactive, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ElMessage } from "element-plus";
 import { useAuthStore } from "@/stores/auth";
 
 const router = useRouter();
@@ -11,17 +10,16 @@ const authStore = useAuthStore();
 const { t } = useI18n();
 const loading = ref(false);
 const form = reactive({
-  username: "",
+  account: "",
   password: ""
 });
 
 async function submit() {
+  if (!form.account || !form.password) return;
   loading.value = true;
   try {
     await authStore.login(form);
-    await router.replace((route.query.redirect as string) || "/dashboard");
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : t("auth.login"));
+    await router.replace((route.query.redirect as string) || "/");
   } finally {
     loading.value = false;
   }
@@ -33,8 +31,8 @@ async function submit() {
     <section class="auth-panel">
       <h1 class="page-title">{{ t("app.title") }}</h1>
       <el-form class="login-form" :model="form" label-position="top" @submit.prevent="submit">
-        <el-form-item :label="t('auth.username')">
-          <el-input v-model="form.username" :placeholder="t('auth.usernamePlaceholder')" autocomplete="username" />
+        <el-form-item :label="t('auth.account')">
+          <el-input v-model="form.account" :placeholder="t('auth.accountPlaceholder')" autocomplete="username" />
         </el-form-item>
         <el-form-item :label="t('auth.password')">
           <el-input

@@ -1,10 +1,10 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router";
-import { ElMessage } from "element-plus";
 import { API_FORBIDDEN_CODES, API_UNAUTHORIZED_CODES, ApiClientError } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 import { useTabsStore } from "@/stores/tabs";
 import { i18n } from "@/i18n";
-import { adminShellRoute, ADMIN_ROUTE_NAME, menusToRoutes } from "./dynamic";
+import { adminShellRoute, ADMIN_ROUTE_NAME, firstMenuPath, menusToRoutes } from "./dynamic";
+import { registerDynamicRouteRemover } from "./dynamicRegistry";
 
 const publicRoutes: RouteRecordRaw[] = [
   {
@@ -34,11 +34,10 @@ const router = createRouter({
 
 function registerDynamicRoutes() {
   const authStore = useAuthStore();
-
   if (authStore.dynamicRoutesReady) return;
 
   menusToRoutes(authStore.menus).forEach((route) => {
-    router.addRoute(ADMIN_ROUTE_NAME, route);
+    registerDynamicRouteRemover(router.addRoute(ADMIN_ROUTE_NAME, route));
   });
   authStore.markDynamicRoutesReady();
 }
@@ -46,28 +45,34 @@ function registerDynamicRoutes() {
 router.beforeEach(async (to) => {
   const authStore = useAuthStore();
   const isPublic = to.name === "Login" || to.name === "Forbidden";
-  const dynamicRoutesWereReady = authStore.dynamicRoutesReady;
 
-  if (isPublic) return true;
+  if (isPublic) {
+    if (to.name === "Login" && authStore.sessionReady) {
+      return firstMenuPath(authStore.menus) || "/";
+    }
+    return true;
+  }
 
   try {
+    const routesWereReady = authStore.dynamicRoutesReady;
     if (!authStore.sessionReady) {
       await authStore.restoreSession();
     }
     registerDynamicRoutes();
 
-    if (!dynamicRoutesWereReady && to.name === "NotFound") {
-      return to.fullPath;
+    if (to.name === ADMIN_ROUTE_NAME) {
+      return firstMenuPath(authStore.menus) || { name: "NotFound" };
     }
 
-    if (to.meta.permission && !authStore.hasPermission(to.meta.permission)) {
-      return { name: "Forbidden" };
+    if (!routesWereReady && to.name === "NotFound") {
+      return { path: to.fullPath, replace: true };
     }
 
-    if (!to.matched.length) {
-      return { name: "NotFound" };
+    const menuId = to.meta.menuId;
+    authStore.activateMenu(menuId);
+    if (menuId) {
+      await authStore.loadButtonPermissions(menuId);
     }
-
     return true;
   } catch (error) {
     if (error instanceof ApiClientError) {
@@ -78,21 +83,19 @@ router.beforeEach(async (to) => {
       if (API_FORBIDDEN_CODES.includes(error.code)) {
         return { name: "Forbidden" };
       }
-      ElMessage.error(error.message);
     }
-    authStore.clearSession();
-    return { name: "Login", query: { redirect: to.fullPath } };
+    return false;
   }
 });
 
 router.afterEach((to) => {
-  const tabsStore = useTabsStore();
-  tabsStore.addRoute(to);
-  document.title = `${i18n.global.t(to.meta.title || "app.title")} - ${i18n.global.t("app.title")}`;
+  useTabsStore().addRoute(to);
+  const title = to.meta.titleKey ? i18n.global.t(to.meta.titleKey) : to.meta.title;
+  document.title = `${title || i18n.global.t("app.title")} - ${i18n.global.t("app.title")}`;
 });
 
 window.addEventListener("admin:api-error", (event) => {
-  const detail = (event as CustomEvent<{ code: number; message: string }>).detail;
+  const detail = (event as CustomEvent<{ code: number | string }>).detail;
   if (API_UNAUTHORIZED_CODES.includes(detail.code)) {
     useAuthStore().clearSession();
     router.push({ name: "Login" });

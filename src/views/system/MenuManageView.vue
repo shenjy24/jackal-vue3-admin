@@ -1,69 +1,191 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { Plus } from "@element-plus/icons-vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
-import QueryBar from "@/components/crud/QueryBar.vue";
 import CrudDialog from "@/components/crud/CrudDialog.vue";
-import { useCrud } from "@/hooks/useCrud";
-import { createApi, listApi, removeApi, updateApi } from "@/api/crud";
-import type { CrudApi } from "@/types/admin";
+import QueryBar from "@/components/crud/QueryBar.vue";
+import {
+  deleteAuthPerm,
+  getAuthPerm,
+  listAuthPerm,
+  queryAuthPerm,
+  saveAuthPerm,
+  updateAuthPerm
+} from "@/api/auth";
+import { hasPermission } from "@/utils/permissions";
+import { PermType, type AdminId, type AuthMenuVo, type AuthPermQo, type AuthPermVo } from "@/types/admin";
 
 defineOptions({ name: "MenuManageView" });
 
-interface MenuRow {
-  id: string | number;
-  name: string;
-  path: string;
-  component: string;
-  permission: string;
-}
-
-interface MenuFilter {
-  keyword: string;
-}
-
-type MenuForm = Omit<MenuRow, "id">;
-
 const { t } = useI18n();
+const loading = ref(false);
+const submitting = ref(false);
+const dialogVisible = ref(false);
+const editingId = ref<AdminId>();
+const rows = ref<AuthPermVo[]>([]);
+const permissionTree = ref<AuthMenuVo[]>([]);
+const filters = reactive<{ code: string; name: string; type?: PermType }>({ code: "", name: "" });
+const pagination = reactive({ pageNum: 1, pageSize: 20, total: 0 });
+const form = reactive<AuthPermQo>(emptyForm());
 
-const api: CrudApi<MenuRow, MenuForm, MenuFilter> = {
-  list: (query) => listApi<MenuRow, MenuFilter>("/system/menu/list", query),
-  create: (form) => createApi("/system/menu/create", form),
-  update: (id, form) => updateApi("/system/menu/update", id, form),
-  remove: (id) => removeApi("/system/menu/delete", id)
-};
+function emptyForm(): AuthPermQo {
+  return {
+    parentId: 0,
+    code: "",
+    name: "",
+    type: PermType.MENU,
+    icon: "",
+    path: "",
+    component: "",
+    sort: 0,
+    remark: ""
+  };
+}
 
-const crud = useCrud(api, { keyword: "" }, { name: "", path: "", component: "", permission: "" });
+async function load() {
+  loading.value = true;
+  try {
+    const page = await queryAuthPerm({
+      code: filters.code || undefined,
+      name: filters.name || undefined,
+      type: filters.type,
+      pageNum: pagination.pageNum,
+      pageSize: pagination.pageSize
+    });
+    rows.value = page.content;
+    pagination.total = page.total;
+  } finally {
+    loading.value = false;
+  }
+}
 
-onMounted(crud.load);
+function search() {
+  pagination.pageNum = 1;
+  return load();
+}
+
+function resetFilters() {
+  filters.code = "";
+  filters.name = "";
+  filters.type = undefined;
+  return search();
+}
+
+async function loadPermissionTree() {
+  permissionTree.value = await listAuthPerm();
+}
+
+async function openCreate() {
+  if (!hasPermission("auth:perm:save")) return;
+  editingId.value = undefined;
+  Object.assign(form, emptyForm());
+  await loadPermissionTree();
+  dialogVisible.value = true;
+}
+
+async function openEdit(row: AuthPermVo) {
+  if (!hasPermission("auth:perm:update")) return;
+  const [permission] = await Promise.all([getAuthPerm({ id: row.id }), loadPermissionTree()]);
+  editingId.value = permission.id;
+  Object.assign(form, {
+    id: permission.id,
+    parentId: permission.parentId ?? 0,
+    code: permission.code || "",
+    name: permission.name,
+    type: permission.type,
+    icon: permission.icon || "",
+    path: permission.path || "",
+    component: permission.component || "",
+    sort: permission.sort ?? 0,
+    remark: permission.remark || ""
+  });
+  dialogVisible.value = true;
+}
+
+async function save() {
+  const permission = editingId.value ? "auth:perm:update" : "auth:perm:save";
+  if (!hasPermission(permission) || !form.name) return;
+  const payload: AuthPermQo = {
+    ...form,
+    id: editingId.value,
+    component: form.type === PermType.MENU ? form.component || undefined : undefined,
+    icon: form.type === PermType.MENU ? form.icon || undefined : undefined,
+    path: form.type === PermType.MENU ? form.path || undefined : undefined
+  };
+
+  submitting.value = true;
+  try {
+    if (editingId.value) {
+      await updateAuthPerm(payload);
+    } else {
+      await saveAuthPerm(payload);
+    }
+    dialogVisible.value = false;
+    ElMessage.success(t("common.saveSuccess"));
+    await load();
+  } finally {
+    submitting.value = false;
+  }
+}
+
+async function remove(row: AuthPermVo) {
+  if (!hasPermission("auth:perm:delete")) return;
+  await ElMessageBox.confirm(t("permission.confirmDelete", { name: row.name }), t("common.delete"), {
+    type: "warning"
+  });
+  await deleteAuthPerm({ id: row.id });
+  ElMessage.success(t("common.deleteSuccess"));
+  await load();
+}
+
+onMounted(load);
 </script>
 
 <template>
   <section class="table-surface">
     <div class="page-toolbar">
-      <h1 class="page-title">{{ t("menu.menu") }}</h1>
-      <el-button v-permission="'system:menu:create'" type="primary" :icon="Plus" @click="crud.openCreate">
+      <h1 class="page-title">{{ t("menu.permission") }}</h1>
+      <el-button v-permission="'auth:perm:save'" type="primary" :icon="Plus" @click="openCreate">
         {{ t("common.add") }}
       </el-button>
     </div>
 
-    <QueryBar @search="crud.search" @reset="crud.resetFilters">
-      <el-form-item :label="t('crud.keyword')">
-        <el-input v-model="crud.filters.keyword" clearable />
+    <QueryBar @search="search" @reset="resetFilters">
+      <el-form-item :label="t('crud.code')">
+        <el-input v-model="filters.code" clearable />
+      </el-form-item>
+      <el-form-item :label="t('crud.name')">
+        <el-input v-model="filters.name" clearable />
+      </el-form-item>
+      <el-form-item :label="t('permission.type')">
+        <el-select v-model="filters.type" clearable style="width: 140px">
+          <el-option :label="t('permission.menuType')" :value="PermType.MENU" />
+          <el-option :label="t('permission.buttonType')" :value="PermType.BUTTON" />
+        </el-select>
       </el-form-item>
     </QueryBar>
 
-    <el-table v-loading="crud.loading.value" :data="crud.rows.value" row-key="id">
+    <el-table v-loading="loading" :data="rows" row-key="id">
+      <el-table-column prop="code" :label="t('crud.code')" min-width="190" />
       <el-table-column prop="name" :label="t('crud.name')" min-width="150" />
-      <el-table-column prop="path" :label="t('crud.path')" min-width="160" />
-      <el-table-column prop="component" :label="t('crud.component')" min-width="160" />
-      <el-table-column prop="permission" :label="t('crud.permission')" min-width="200" />
+      <el-table-column :label="t('permission.type')" width="100">
+        <template #default="{ row }">
+          <el-tag :type="row.type === PermType.MENU ? 'primary' : 'success'">
+            {{ row.type === PermType.MENU ? t("permission.menuType") : t("permission.buttonType") }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column prop="path" :label="t('crud.path')" min-width="150" show-overflow-tooltip />
+      <el-table-column prop="component" :label="t('crud.component')" min-width="190" show-overflow-tooltip />
+      <el-table-column prop="sort" :label="t('crud.sort')" width="90" />
+      <el-table-column prop="remark" :label="t('crud.remark')" min-width="180" show-overflow-tooltip />
       <el-table-column :label="t('common.actions')" width="180" fixed="right">
         <template #default="{ row }">
-          <el-button v-permission="'system:menu:update'" link type="primary" @click="crud.openEdit(row)">
+          <el-button v-permission="'auth:perm:update'" link type="primary" @click="openEdit(row)">
             {{ t("common.edit") }}
           </el-button>
-          <el-button v-permission="'system:menu:delete'" link type="danger" @click="crud.remove(row)">
+          <el-button v-permission="'auth:perm:delete'" link type="danger" @click="remove(row)">
             {{ t("common.delete") }}
           </el-button>
         </template>
@@ -71,29 +193,71 @@ onMounted(crud.load);
     </el-table>
 
     <el-pagination
-      v-model:current-page="crud.pagination.page"
-      v-model:page-size="crud.pagination.pageSize"
+      v-model:current-page="pagination.pageNum"
+      v-model:page-size="pagination.pageSize"
       layout="total, sizes, prev, pager, next"
-      :total="crud.pagination.total"
-      @current-change="crud.load"
-      @size-change="crud.search"
+      :total="pagination.total"
+      @current-change="load"
+      @size-change="search"
     />
 
-    <CrudDialog v-model="crud.dialogVisible.value" :title="t('menu.menu')" @save="crud.save">
-      <el-form :model="crud.form" label-width="108px">
-        <el-form-item :label="t('crud.name')">
-          <el-input v-model="crud.form.name" />
+    <CrudDialog
+      v-model="dialogVisible"
+      :title="editingId ? t('permission.editTitle') : t('permission.addTitle')"
+      :loading="submitting"
+      @save="save"
+    >
+      <el-form :model="form" label-width="112px">
+        <el-form-item :label="t('permission.parent')">
+          <el-tree-select
+            v-model="form.parentId"
+            :data="permissionTree"
+            node-key="id"
+            check-strictly
+            :render-after-expand="false"
+            :props="{ children: 'children', label: 'name', value: 'id' }"
+            style="width: 100%"
+          />
         </el-form-item>
-        <el-form-item :label="t('crud.path')">
-          <el-input v-model="crud.form.path" />
+        <el-form-item :label="t('permission.type')" required>
+          <el-radio-group v-model="form.type">
+            <el-radio :value="PermType.MENU">{{ t("permission.menuType") }}</el-radio>
+            <el-radio :value="PermType.BUTTON">{{ t("permission.buttonType") }}</el-radio>
+          </el-radio-group>
         </el-form-item>
-        <el-form-item :label="t('crud.component')">
-          <el-input v-model="crud.form.component" />
+        <el-form-item :label="t('crud.code')">
+          <el-input v-model="form.code" />
         </el-form-item>
-        <el-form-item :label="t('crud.permission')">
-          <el-input v-model="crud.form.permission" />
+        <el-form-item :label="t('crud.name')" required>
+          <el-input v-model="form.name" />
+        </el-form-item>
+        <template v-if="form.type === PermType.MENU">
+          <el-form-item :label="t('crud.icon')">
+            <el-input v-model="form.icon" />
+          </el-form-item>
+          <el-form-item :label="t('crud.path')">
+            <el-input v-model="form.path" placeholder="/auth/user" />
+          </el-form-item>
+          <el-form-item :label="t('crud.component')">
+            <el-input v-model="form.component" placeholder="system/UserManageView" />
+            <div class="form-tip">{{ t("permission.componentTip") }}</div>
+          </el-form-item>
+        </template>
+        <el-form-item :label="t('crud.sort')">
+          <el-input-number v-model="form.sort" :min="0" />
+        </el-form-item>
+        <el-form-item :label="t('crud.remark')">
+          <el-input v-model="form.remark" type="textarea" />
         </el-form-item>
       </el-form>
     </CrudDialog>
   </section>
 </template>
+
+<style scoped>
+.form-tip {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+</style>

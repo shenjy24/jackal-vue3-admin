@@ -2,18 +2,12 @@
 import { computed } from "vue";
 import { useRoute, useRouter, RouterView } from "vue-router";
 import { useI18n } from "vue-i18n";
-import {
-  ArrowDown,
-  Close,
-  Fold,
-  SwitchButton
-} from "@element-plus/icons-vue";
+import { ArrowDown, Close, Fold, SwitchButton } from "@element-plus/icons-vue";
 import { ElMessageBox } from "element-plus";
+import AdminMenuItem from "@/components/layout/AdminMenuItem.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSettingsStore } from "@/stores/settings";
 import { useTabsStore } from "@/stores/tabs";
-import { resolveMenuIcon } from "@/router/componentMap";
-import type { MenuNode } from "@/types/admin";
 
 const route = useRoute();
 const router = useRouter();
@@ -24,8 +18,12 @@ const { t } = useI18n();
 
 const breadcrumbs = computed(() => route.matched.filter((item) => item.meta.title && !item.meta.hidden));
 
-function menuIndex(menu: MenuNode) {
-  return menu.path.startsWith("/") ? menu.path : `/${menu.path}`;
+function routeTitle(title: string, titleKey?: string) {
+  return titleKey ? t(titleKey) : title;
+}
+
+function tabTitle(title: string) {
+  return t(title, title);
 }
 
 function switchLocale(locale: "zh-CN" | "en-US") {
@@ -33,11 +31,8 @@ function switchLocale(locale: "zh-CN" | "en-US") {
 }
 
 async function logout() {
-  await ElMessageBox.confirm(t("common.logout"), t("app.title"), {
-    type: "warning"
-  });
+  await ElMessageBox.confirm(t("common.confirmLogout"), t("common.logout"), { type: "warning" });
   await authStore.logout();
-  tabsStore.reset();
   await router.push({ name: "Login" });
 }
 
@@ -46,7 +41,7 @@ function closeTab(path: string) {
   tabsStore.removeTab(path);
   if (route.fullPath === path) {
     const next = tabsStore.visitedTabs[index - 1] || tabsStore.visitedTabs[0];
-    router.push(next?.path || "/dashboard");
+    router.push(next?.path || "/");
   }
 }
 </script>
@@ -57,32 +52,7 @@ function closeTab(path: string) {
       <div class="admin-shell__brand">{{ t("app.title") }}</div>
       <el-scrollbar>
         <el-menu :default-active="route.path" router class="admin-menu">
-          <template v-for="menu in authStore.menus" :key="menu.id">
-            <el-sub-menu v-if="menu.children?.length" :index="menuIndex(menu)">
-              <template #title>
-                <el-icon v-if="menu.meta.icon && resolveMenuIcon(menu.meta.icon)">
-                  <component :is="resolveMenuIcon(menu.meta.icon)" />
-                </el-icon>
-                <span>{{ t(menu.meta.title) }}</span>
-              </template>
-              <el-menu-item
-                v-for="child in menu.children"
-                :key="child.id"
-                :index="menuIndex(child)"
-              >
-                <el-icon v-if="child.meta.icon && resolveMenuIcon(child.meta.icon)">
-                  <component :is="resolveMenuIcon(child.meta.icon)" />
-                </el-icon>
-                <span>{{ t(child.meta.title) }}</span>
-              </el-menu-item>
-            </el-sub-menu>
-            <el-menu-item v-else :index="menuIndex(menu)">
-              <el-icon v-if="menu.meta.icon && resolveMenuIcon(menu.meta.icon)">
-                <component :is="resolveMenuIcon(menu.meta.icon)" />
-              </el-icon>
-              <span>{{ t(menu.meta.title) }}</span>
-            </el-menu-item>
-          </template>
+          <AdminMenuItem v-for="menu in authStore.menus" :key="menu.id" :menu="menu" />
         </el-menu>
       </el-scrollbar>
     </el-aside>
@@ -93,7 +63,7 @@ function closeTab(path: string) {
           <el-button :icon="Fold" text />
           <el-breadcrumb separator="/">
             <el-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
-              {{ t(item.meta.title || "app.title") }}
+              {{ routeTitle(item.meta.title, item.meta.titleKey) }}
             </el-breadcrumb-item>
           </el-breadcrumb>
         </div>
@@ -110,7 +80,7 @@ function closeTab(path: string) {
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <span class="admin-shell__user">{{ authStore.user?.nickname || authStore.user?.username }}</span>
+          <span class="admin-shell__user">{{ authStore.user?.nickname || authStore.user?.account }}</span>
           <el-button :icon="SwitchButton" text @click="logout">{{ t("common.logout") }}</el-button>
         </div>
       </el-header>
@@ -123,7 +93,7 @@ function closeTab(path: string) {
           :class="{ 'is-active': tab.path === route.fullPath }"
           @click="router.push(tab.path)"
         >
-          <span>{{ t(tab.title) }}</span>
+          <span>{{ tabTitle(tab.title) }}</span>
           <el-icon v-if="!tab.keepAlive" @click.stop="closeTab(tab.path)"><Close /></el-icon>
         </button>
       </div>

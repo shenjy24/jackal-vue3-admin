@@ -1,35 +1,41 @@
 import type { Component } from "vue";
 import {
   House,
+  Lock,
   Menu as MenuIcon,
   Setting,
   User,
   UserFilled
 } from "@element-plus/icons-vue";
 
-export const componentMap = {
-  Dashboard: () => import("@/views/dashboard/DashboardView.vue"),
-  UserManage: () => import("@/views/system/UserManageView.vue"),
-  RoleManage: () => import("@/views/system/RoleManageView.vue"),
-  MenuManage: () => import("@/views/system/MenuManageView.vue")
+const viewModules = import.meta.glob("/src/views/**/*.vue");
+
+const iconMap: Record<string, Component> = {
+  house: House,
+  setting: Setting,
+  user: User,
+  team: UserFilled,
+  lock: Lock,
+  menu: MenuIcon
 };
 
-export type ComponentKey = keyof typeof componentMap;
+export function resolveMenuComponent(component?: string) {
+  const value = component?.trim();
+  if (!value) return undefined;
+  if (
+    value.includes("..") ||
+    value.includes("\\") ||
+    value.startsWith("/") ||
+    /^[a-zA-Z]:/.test(value)
+  ) {
+    return undefined;
+  }
 
-export const iconMap: Record<string, Component> = {
-  House,
-  Menu: MenuIcon,
-  Setting,
-  User,
-  UserFilled
-};
-
-export function resolveMenuComponent(key?: string) {
-  if (!key) return undefined;
-  return componentMap[key as ComponentKey];
+  const normalized = value.replace(/\.vue$/, "");
+  return viewModules[`/src/views/${normalized}.vue`];
 }
 
 export function resolveMenuIcon(key?: string) {
-  if (!key) return undefined;
-  return iconMap[key];
+  if (!key) return MenuIcon;
+  return iconMap[key.toLowerCase()] || MenuIcon;
 }

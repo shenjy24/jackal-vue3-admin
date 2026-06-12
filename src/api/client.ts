@@ -2,11 +2,11 @@ import axios, { AxiosError, type AxiosRequestConfig } from "axios";
 import { ElMessage } from "element-plus";
 import type { ApiResponse } from "@/types/admin";
 
-type ApiCode = number | string;
+export type ApiCode = number | string;
 
 export const API_SUCCESS_CODES: ApiCode[] = [2000, "2000"];
-export const API_UNAUTHORIZED_CODES: ApiCode[] = [401, 10001];
-export const API_FORBIDDEN_CODES: ApiCode[] = [403, 10003];
+export const API_UNAUTHORIZED_CODES: ApiCode[] = [2001, "2001"];
+export const API_FORBIDDEN_CODES: ApiCode[] = [2002, "2002"];
 
 export class ApiClientError extends Error {
   code: ApiCode;
@@ -43,13 +43,17 @@ apiClient.interceptors.response.use(
       return body.data;
     }
 
+    const message = body.message || "Request failed";
     window.dispatchEvent(
       new CustomEvent("admin:api-error", {
-        detail: { code: body.code, message: body.message }
+        detail: { code: body.code, message }
       })
     );
 
-    throw new ApiClientError(body.code, body.message || "Request failed");
+    if (!API_UNAUTHORIZED_CODES.includes(body.code)) {
+      ElMessage.error(message);
+    }
+    throw new ApiClientError(body.code, message);
   },
   (error: AxiosError<ApiResponse>) => {
     const message = error.response?.data?.message || error.message || "Network error";
@@ -65,7 +69,7 @@ export function post<TData, TPayload = Record<string, unknown>>(
 ) {
   return apiClient.request<TData, TData>({
     url,
-    data: payload || {},
+    data: payload ?? {},
     ...config,
     method: "post"
   });
