@@ -11,8 +11,8 @@
 系统 SHALL 使用菜单 `component` 在 `import.meta.glob("/src/views/**/*.vue")` 生成的构建期模块集合中解析页面，禁止加载集合外文件。
 
 #### Scenario: component 匹配本地页面
-- **WHEN** 菜单 component 为 `system/UserManageView`
-- **THEN** 前端加载 `/src/views/system/UserManageView.vue`
+- **WHEN** 菜单 component 为 `auth/UserManageView`
+- **THEN** 前端加载 `/src/views/auth/UserManageView.vue`
 
 #### Scenario: component 无法匹配本地页面
 - **WHEN** 后端返回的叶子菜单 component 不存在于构建期模块集合

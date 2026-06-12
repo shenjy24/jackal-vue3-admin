@@ -2,7 +2,7 @@
 
 `jackal-vue3-admin` 已经具备 Vue 3 管理后台的布局、Pinia、动态路由、权限指令、CRUD 组件、i18n 和部署文件，但当前业务代码使用的是示例契约：`/auth/session`、`/system/*`、`page/list`、`username` 和 `system:*` 权限码。实际后端 `jackal-java-template` 仅在 `/admin/**` 下提供管理端能力，认证与权限集中在 `AdminAuthController`，并使用 `account`、`pageNum/pageSize`、`total/content`、`2000/2001/2002` 等契约。
 
-后端会话没有聚合接口。当前用户、菜单和页面按钮分别由 `getUser`、`listAuthMenu`、`listAuthButton` 返回。菜单模型已增加 `component` 字段，初始化数据使用相对 `src/views` 的无扩展名路径，例如 `system/UserManageView`。
+后端会话没有聚合接口。当前用户、菜单和页面按钮分别由 `getUser`、`listAuthMenu`、`listAuthButton` 返回。菜单模型已增加 `component` 字段，初始化数据使用相对 `src/views` 的无扩展名路径，例如 `auth/UserManageView`。
 
 ## Goals / Non-Goals
 

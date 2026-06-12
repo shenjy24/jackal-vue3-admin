@@ -38,7 +38,7 @@ npm run build
 
 1. 在 `src/views` 创建页面，例如 `src/views/order/OrderManageView.vue`。
 2. 后端新增菜单权限，分别配置浏览器 `path` 和稳定权限 `code`。
-3. 菜单 `component` 配置为相对 `src/views` 的无扩展名路径，例如 `order/OrderManageView`。
+3. 菜单 `component` 配置为相对 `src/views` 的无扩展名路径，例如权限模块使用 `auth/UserManageView`，订单模块使用 `order/OrderManageView`。
 4. 为角色绑定菜单及按钮权限，并在页面中使用后端按钮权限码。
 5. 需要菜单翻译时，在 `src/i18n/locales` 的 `menuCode` 中用菜单 code 添加文案。
 

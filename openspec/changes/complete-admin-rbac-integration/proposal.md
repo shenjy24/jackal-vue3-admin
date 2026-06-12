@@ -31,5 +31,5 @@
 - 主要影响 `src/api`、认证与权限 Pinia store、动态路由转换、权限工具、系统管理页面、共享类型和国际化资源。
 - 前端只对接 `jackal-java-template` 的 `com.tech.controller.admin` 能力，不扩展 web 用户侧功能。
 - 不要求新增前端依赖；继续使用现有 Vue 3、TypeScript、Pinia、Vue Router、Element Plus 和 Axios 技术栈。
-- 后端菜单实体、Qo、Vo 和初始化 SQL 已增加独立 `component` 字段；叶子菜单使用相对 `src/views` 的无扩展名路径，例如 `system/UserManageView`，目录菜单和按钮权限保持为空。
+- 后端菜单实体、Qo、Vo 和初始化 SQL 已增加独立 `component` 字段；叶子菜单使用相对 `src/views` 的无扩展名路径，例如 `auth/UserManageView`，目录菜单和按钮权限保持为空。
 - 成功码使用字符串 `2000`，未登录和无权限分别使用 `2001`、`2002`；分页数据使用 `{ total, content }`。

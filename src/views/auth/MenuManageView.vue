@@ -239,7 +239,7 @@ onMounted(load);
             <el-input v-model="form.path" placeholder="/auth/user" />
           </el-form-item>
           <el-form-item :label="t('crud.component')">
-            <el-input v-model="form.component" placeholder="system/UserManageView" />
+            <el-input v-model="form.component" placeholder="auth/UserManageView" />
             <div class="form-tip">{{ t("permission.componentTip") }}</div>
           </el-form-item>
         </template>
