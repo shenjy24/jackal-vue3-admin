@@ -14,10 +14,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/api': {
+      '/admin/api': {
         target: process.env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080',
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
+        rewrite: (path) => path.replace(/^\/admin\/api/, '')
       }
     }
   }

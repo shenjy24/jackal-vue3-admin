@@ -6,13 +6,22 @@
 
 ```sh
 npm install
-npm run dev
+npm run local
 npm run build
 ```
 
-接口基础地址由 `VITE_API_BASE_URL` 配置，默认 `/api`。所有请求统一经过 `src/api/client.ts`，使用 POST 和 `withCredentials: true`。认证依赖后端 HttpOnly Cookie，前端不保存 Token。
+接口基础地址由 `VITE_API_BASE_URL` 配置，默认 `/admin/api`。所有请求统一经过 `src/api/client.ts`，使用 POST 和 `withCredentials: true`。认证依赖后端 HttpOnly Cookie，前端不保存 Token。
 
-开发服务器会将 `/api` 代理到 `VITE_DEV_PROXY_TARGET`，默认 `http://localhost:8080`，并移除 `/api` 前缀；生产 Nginx 使用同样的转发语义。
+共 4 个运行环境，前端只需 3 份 env 配置：
+
+| 环境 | 命令 | env 文件 | 代理方式 |
+| --- | --- | --- | --- |
+| 本地环境 local | `npm run local` | `.env.local` | Vite 代理到 `VITE_DEV_PROXY_TARGET`（默认 `http://localhost:8080`） |
+| 开发环境 development | `npm run dev` | `.env.development` | Vite 代理到开发服务器后端 |
+| 测试环境 test | `npm run build` | `.env.production` | Nginx 代理 `/admin/api/` |
+| 线上环境 production | `npm run build` | `.env.production` | Nginx 代理 `/admin/api/` |
+
+test 与 production 使用相同构建产物，区别在部署时 Nginx 的后端代理目标。开发服务器会移除 `/admin/api` 前缀后转发；部署时 Nginx 使用相同语义，将 `/admin/api/` 代理到后端。
 
 ## Admin 接口契约
 
@@ -48,4 +57,20 @@ npm run build
 
 ## 部署
 
-构建产物输出到 `dist`。`deploy/nginx.conf` 已配置 history 路由回退，部署时按环境调整 `/api/` 的后端代理目标。
+构建产物输出到 `dist`，test 与 production 共用同一份 `npm run build` 产物。
+
+前端 `VITE_API_BASE_URL=/admin/api` 是相对路径，浏览器会请求**当前访问站点**下的 `/admin/api/...`，不会写死后端 IP 或域名。test / production 的后端差异由**各自服务器上的 Nginx** 决定：
+
+```
+用户访问 test-admin.example.com
+  → 请求 test-admin.example.com/admin/api/admin/auth/login
+  → 测试机 Nginx 代理到 http://test-backend:8080/admin/auth/login
+
+用户访问 admin.example.com
+  → 请求 admin.example.com/admin/api/admin/auth/login
+  → 线上机 Nginx 代理到 http://prod-backend:8080/admin/auth/login
+```
+
+`deploy/nginx.conf` 已配置 history 路由回退；部署到不同环境时，只需修改该机器 Nginx 中 `location /admin/api/` 的 `proxy_pass` 指向对应后端即可。
+
+本地 / 开发环境没有 Nginx，通过 `.env.local`、`.env.development` 中的 `VITE_DEV_PROXY_TARGET` 指定 Vite 开发代理目标。
