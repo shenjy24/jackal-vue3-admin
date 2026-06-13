@@ -16,7 +16,7 @@ npm run build
 
 | 环境 | 命令 | env 文件 | 代理方式 |
 | --- | --- | --- | --- |
-| 本地环境 local | `npm run local` | `.env.local` | Vite 代理到 `VITE_DEV_PROXY_TARGET`（默认 `http://localhost:8080`） |
+| 本地环境 local | `npm run local` | `.env.localdev` | Vite 代理到 `VITE_DEV_PROXY_TARGET`（默认 `http://localhost:8080`） |
 | 开发环境 development | `npm run dev` | `.env.development` | Vite 代理到开发服务器后端 |
 | 测试环境 test | `npm run build` | `.env.production` | Nginx 代理 `/admin/api/` |
 | 线上环境 production | `npm run build` | `.env.production` | Nginx 代理 `/admin/api/` |
@@ -73,4 +73,4 @@ test 与 production 使用相同构建产物，区别在部署时 Nginx 的后�
 
 `deploy/nginx.conf` 已配置 history 路由回退；部署到不同环境时，只需修改该机器 Nginx 中 `location /admin/api/` 的 `proxy_pass` 指向对应后端即可。
 
-本地 / 开发环境没有 Nginx，通过 `.env.local`、`.env.development` 中的 `VITE_DEV_PROXY_TARGET` 指定 Vite 开发代理目标。
+本地 / 开发环境没有 Nginx，通过 `.env.localdev`、`.env.development` 中的 `VITE_DEV_PROXY_TARGET` 指定 Vite 开发代理目标。
