@@ -15,8 +15,8 @@ FROM ${NODE_IMAGE} AS build
 WORKDIR /app
 
 # 先安装依赖（利用 Docker 层缓存）
-COPY package*.json ./
-RUN npm ci
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 # 复制源码并构建
 COPY index.html vite.config.js tsconfig.json env.d.ts .env.production ./
@@ -29,8 +29,29 @@ RUN npm run build
 # ========================================
 FROM ${NGINX_IMAGE} AS runtime
 
-COPY ./nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+ARG APP_UID=1000
+ARG APP_GID=1000
+
+WORKDIR /usr/share/nginx/html
+
+RUN set -eux; \
+    if ! getent group "${APP_GID}" >/dev/null; then addgroup -g "${APP_GID}" -S app; fi; \
+    if ! getent passwd "${APP_UID}" >/dev/null; then \
+        APP_GROUP="$(getent group "${APP_GID}" | cut -d: -f1)"; \
+        adduser -S -D -H -h /nonexistent -s /sbin/nologin -u "${APP_UID}" -G "${APP_GROUP}" app; \
+    fi; \
+    mkdir -p /var/cache/nginx/client_temp \
+             /var/cache/nginx/proxy_temp \
+             /var/cache/nginx/fastcgi_temp \
+             /var/cache/nginx/uwsgi_temp \
+             /var/cache/nginx/scgi_temp \
+             /var/run; \
+    chown -R "${APP_UID}:${APP_GID}" /var/cache/nginx /var/run /usr/share/nginx/html /etc/nginx/conf.d
+
+COPY --chown=${APP_UID}:${APP_GID} ./nginx.conf /etc/nginx/conf.d/default.conf
+COPY --chown=${APP_UID}:${APP_GID} --from=build /app/dist/ /usr/share/nginx/html/
+
+USER ${APP_UID}:${APP_GID}
 
 EXPOSE 80
 
