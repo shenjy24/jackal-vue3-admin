@@ -1,17 +1,23 @@
 #!/bin/bash
 
-# ========================================
-# jackal-vue3-admin 内网构建部署脚本
-# 功能：Docker 构建 → 输出到发布目录 → 更新 current 软链接 → 重启 Nginx
-# 前提：宿主机已安装 Docker 和 Nginx
-# ========================================
-
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# ================= Usage =================
+# Offline deployment only depends on this directory and an uploaded dist artifact.
+# Build dist locally, upload dist or dist tarball, then run:
+#   bash deploy.sh
+#   bash deploy.sh dist
+#   bash deploy.sh jackal-vue3-admin-dist.tar.gz
 
-# ----- 加载环境配置 -----
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+resolve_deploy_path() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *) printf '%s\n' "$SCRIPT_DIR/$1" ;;
+    esac
+}
+
 ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/deploy.env}"
 if [ -f "$ENV_FILE" ]; then
     set -a
@@ -19,23 +25,26 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
-# ----- 默认值 -----
 APP_NAME="${APP_NAME:-jackal-vue3-admin}"
-RELEASES_DIR="${RELEASES_DIR:-$PACKAGE_ROOT/releases}"
-CURRENT_LINK="${CURRENT_LINK:-$RELEASES_DIR/current}"
-BACKUP_DIR="${BACKUP_DIR:-$PACKAGE_ROOT/backup}"
-NODE_IMAGE="${NODE_IMAGE:-node:24.17.0-slim}"
-NGINX_CONF_FILE="${NGINX_CONF_FILE:-/etc/nginx/conf.d/jackal-vue3-admin.conf}"
-RESTART_NGINX="${RESTART_NGINX:-1}"
-KEEP_RELEASES="${KEEP_RELEASES:-5}"
-BUILD_TIMEOUT="${BUILD_TIMEOUT:-300}"
+ENV="${ENV:-prod}"
+APP_PORT="${APP_PORT:-18080}"
+NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.30.2-alpine}"
+DIST_DIR="$(resolve_deploy_path "${DIST_DIR:-.}")"
+IMAGE_KEEP_COUNT="${IMAGE_KEEP_COUNT:-3}"
+DOCKERFILE_PATH="${DOCKERFILE_PATH:-$SCRIPT_DIR/Dockerfile}"
+COMPOSE_FILE="${COMPOSE_FILE:-$SCRIPT_DIR/docker-compose.yml}"
+NGINX_CONF_PATH="${NGINX_CONF_PATH:-$SCRIPT_DIR/nginx.conf}"
+PACKAGE_INPUT="${1:-${DIST_PACKAGE:-}}"
 
-# ----- 时间戳与路径 -----
-TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
-RELEASE_DIR="$RELEASES_DIR/$TIMESTAMP"
-DIST_DIR="$RELEASE_DIR/dist"
+APP_CONTAINER_NAME="${APP_CONTAINER_NAME:-${APP_NAME}-${ENV}}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${APP_NAME}-${ENV}}"
+BUILD_TIME="$(date +%Y%m%d%H%M%S)"
+APP_IMAGE="${APP_IMAGE:-${APP_NAME}:${ENV}-${BUILD_TIME}}"
+BUILD_CONTEXT=""
+ARCHIVE_TMP_DIR=""
 
-# ----- 颜色输出 -----
+export APP_CONTAINER_NAME APP_PORT APP_IMAGE
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -45,142 +54,198 @@ log_info()  { echo -e "${GREEN}[INFO]${NC}  $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# ----- 前置检查 -----
+cleanup() {
+    if [ -n "${BUILD_CONTEXT:-}" ] && [ -d "$BUILD_CONTEXT" ]; then
+        rm -rf "$BUILD_CONTEXT"
+    fi
+    if [ -n "${ARCHIVE_TMP_DIR:-}" ] && [ -d "$ARCHIVE_TMP_DIR" ]; then
+        rm -rf "$ARCHIVE_TMP_DIR"
+    fi
+}
+trap cleanup EXIT
+
 check_prerequisites() {
-    if ! command -v docker &>/dev/null; then
+    if ! command -v docker >/dev/null 2>&1; then
         log_error "未安装 Docker，请先安装 Docker"
         exit 1
     fi
 
-    if ! docker image inspect "$NODE_IMAGE" &>/dev/null; then
-        log_warn "未找到镜像 $NODE_IMAGE，尝试拉取..."
-        docker pull "$NODE_IMAGE" || {
-            log_error "拉取 $NODE_IMAGE 失败，请确认网络或离线镜像是否已加载"
+    if ! docker compose version >/dev/null 2>&1; then
+        log_error "未检测到 Docker Compose v2，请先安装或升级 Docker Compose"
+        exit 1
+    fi
+
+    if [ ! -f "$DOCKERFILE_PATH" ]; then
+        log_error "Dockerfile 不存在: $DOCKERFILE_PATH"
+        exit 1
+    fi
+
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        log_error "docker-compose.yml 不存在: $COMPOSE_FILE"
+        exit 1
+    fi
+
+    if [ ! -f "$NGINX_CONF_PATH" ]; then
+        log_error "nginx.conf 不存在: $NGINX_CONF_PATH"
+        exit 1
+    fi
+
+    if ! docker image inspect "$NGINX_IMAGE" >/dev/null 2>&1; then
+        log_error "运行时基础镜像不存在: $NGINX_IMAGE"
+        log_info "请先使用 docker load -i 加载对应 Nginx 镜像 tar。"
+        exit 1
+    fi
+}
+
+find_dist_package() {
+    if [ -n "$PACKAGE_INPUT" ]; then
+        PACKAGE_PATH="$(resolve_deploy_path "$PACKAGE_INPUT")"
+        return
+    fi
+
+    if [ -d "$DIST_DIR/dist" ]; then
+        PACKAGE_PATH="$DIST_DIR/dist"
+        return
+    fi
+
+    mapfile -t candidates < <(
+        find "$DIST_DIR" -maxdepth 1 -type f \
+            \( -name 'dist.tar.gz' -o -name 'dist.tgz' -o -name 'jackal-vue3-admin-dist*.tar.gz' -o -name 'jackal-vue3-admin-dist*.tgz' -o -name 'dist.zip' -o -name 'jackal-vue3-admin-dist*.zip' \) \
+            | sort
+    )
+
+    if [ "${#candidates[@]}" -eq 1 ]; then
+        PACKAGE_PATH="${candidates[0]}"
+        return
+    fi
+
+    log_error "未能唯一定位 dist 部署包"
+    echo "请将本地 npm run build 产生的 dist 目录或压缩包上传到: $DIST_DIR"
+    echo "支持: dist/、dist.tar.gz、dist.tgz、dist.zip、jackal-vue3-admin-dist*.tar.gz、jackal-vue3-admin-dist*.zip"
+    echo "也可以显式指定: bash deploy.sh <dist目录或压缩包>"
+    if [ "${#candidates[@]}" -gt 1 ]; then
+        echo "匹配到多个候选包:"
+        printf '  %s\n' "${candidates[@]}"
+    fi
+    exit 1
+}
+
+resolve_dist_dir() {
+    find_dist_package
+
+    if [ -d "$PACKAGE_PATH" ]; then
+        DIST_SOURCE="$PACKAGE_PATH"
+    elif [ -f "$PACKAGE_PATH" ]; then
+        ARCHIVE_TMP_DIR="$(mktemp -d)"
+        case "$PACKAGE_PATH" in
+            *.tar.gz|*.tgz)
+                tar -xzf "$PACKAGE_PATH" -C "$ARCHIVE_TMP_DIR"
+                ;;
+            *.zip)
+                if ! command -v unzip >/dev/null 2>&1; then
+                    log_error "部署 zip 包需要安装 unzip，或改用 tar.gz 包"
+                    exit 1
+                fi
+                unzip -q "$PACKAGE_PATH" -d "$ARCHIVE_TMP_DIR"
+                ;;
+            *)
+                log_error "不支持的部署包格式: $PACKAGE_PATH"
+                exit 1
+                ;;
+        esac
+
+        if [ -f "$ARCHIVE_TMP_DIR/dist/index.html" ]; then
+            DIST_SOURCE="$ARCHIVE_TMP_DIR/dist"
+        elif [ -f "$ARCHIVE_TMP_DIR/index.html" ]; then
+            DIST_SOURCE="$ARCHIVE_TMP_DIR"
+        else
+            log_error "部署包内未找到 dist/index.html 或 index.html: $PACKAGE_PATH"
             exit 1
-        }
-    fi
-
-    if [ -z "${SKIP_NGINX_CHECK:-}" ] && [ "$RESTART_NGINX" = "1" ]; then
-        if ! command -v nginx &>/dev/null; then
-            log_warn "未检测到 Nginx 命令，跳过重启 Nginx"
-            RESTART_NGINX=0
         fi
-    fi
-}
-
-# ----- 构建 -----
-build_frontend() {
-    log_info "创建发布目录: $RELEASE_DIR"
-    mkdir -p "$RELEASE_DIR"
-
-    log_info "开始 Docker 构建..."
-    log_info "镜像: $NODE_IMAGE"
-    log_info "输出目录: $DIST_DIR"
-
-    cd "$PACKAGE_ROOT"
-
-    # 使用 docker buildx 直接将构建产物输出到宿主机
-    DOCKER_BUILDKIT=1 docker buildx build \
-        --file "$SCRIPT_DIR/Dockerfile" \
-        --build-arg NODE_IMAGE="$NODE_IMAGE" \
-        --output type=local,dest="$RELEASE_DIR" \
-        --progress=plain \
-        "$PACKAGE_ROOT" 2>&1 | while IFS= read -r line; do
-            echo "  $line"
-        done
-
-    if [ ! -d "$DIST_DIR" ] || [ -z "$(ls -A "$DIST_DIR" 2>/dev/null)" ]; then
-        log_error "构建产物 dist/ 目录为空，构建失败"
+    else
+        log_error "部署包不存在: $PACKAGE_PATH"
         exit 1
     fi
 
-    log_info "构建产物大小: $(du -sh "$DIST_DIR" | cut -f1)"
-}
-
-# ----- 部署 -----
-deploy() {
-    log_info "更新 current 软链接: $CURRENT_LINK -> $TIMESTAMP"
-
-    # 创建 releases 目录下的软链接
-    cd "$RELEASES_DIR"
-    ln -sfn "$TIMESTAMP" current
-
-    log_info "当前版本: $(readlink current)"
-}
-
-# ----- 清理历史版本 -----
-cleanup_old_releases() {
-    local release_dirs
-    release_dirs="$(find "$RELEASES_DIR" -maxdepth 1 -type d -name '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*' | sort)"
-    local count
-    count="$(echo "$release_dirs" | grep -c . || true)"
-
-    if [ "$count" -le "$KEEP_RELEASES" ]; then
-        log_info "当前版本数 $count，无需清理（保留 $KEEP_RELEASES 个）"
-        return
+    if [ ! -f "$DIST_SOURCE/index.html" ]; then
+        log_error "dist 目录缺少 index.html: $DIST_SOURCE"
+        exit 1
     fi
+}
 
-    local to_delete=$((count - KEEP_RELEASES))
-    log_info "清理 $to_delete 个历史版本..."
+prepare_build_context() {
+    resolve_dist_dir
+    BUILD_CONTEXT="$(mktemp -d)"
 
-    echo "$release_dirs" | head -n "$to_delete" | while IFS= read -r dir; do
-        log_info "  删除: $dir"
-        rm -rf "$dir"
+    mkdir -p "$BUILD_CONTEXT/dist"
+    cp -a "$DIST_SOURCE"/. "$BUILD_CONTEXT/dist/"
+    cp "$DOCKERFILE_PATH" "$BUILD_CONTEXT/Dockerfile"
+    cp "$NGINX_CONF_PATH" "$BUILD_CONTEXT/nginx.conf"
+
+    log_info "部署包: $PACKAGE_PATH"
+    log_info "构建上下文: $BUILD_CONTEXT"
+    log_info "dist 大小: $(du -sh "$BUILD_CONTEXT/dist" | cut -f1)"
+}
+
+build_image() {
+    log_info "构建应用镜像: $APP_IMAGE"
+    docker build \
+        --build-arg "NGINX_IMAGE=$NGINX_IMAGE" \
+        -t "$APP_IMAGE" \
+        "$BUILD_CONTEXT"
+
+    cat > "$SCRIPT_DIR/app-image.env" <<EOF
+APP_IMAGE=$APP_IMAGE
+DIST_PACKAGE=$PACKAGE_PATH
+BUILD_TIME=$BUILD_TIME
+EOF
+}
+
+deploy_container() {
+    log_info "启动容器: $APP_CONTAINER_NAME"
+    log_info "对外端口: $APP_PORT -> 80"
+
+    docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --no-build app-web
+
+    sleep 3
+    if ! docker ps --filter "name=^/${APP_CONTAINER_NAME}$" --filter "status=running" --format "{{.Names}}" | grep -qx "$APP_CONTAINER_NAME"; then
+        log_error "容器未处于运行状态，请查看日志: docker logs --tail=200 $APP_CONTAINER_NAME"
+        exit 1
+    fi
+}
+
+cleanup_old_images() {
+    log_info "保留最新 $IMAGE_KEEP_COUNT 个 ${APP_NAME}:${ENV}-* 镜像版本..."
+    mapfile -t old_image_refs < <(
+        docker image ls "$APP_NAME" --format "{{.Repository}}:{{.Tag}}" \
+            | awk -v env="$ENV" -v keep="$IMAGE_KEEP_COUNT" '$1 ~ ":" env "-" { count++; if (count > keep) print $1 }'
+    )
+
+    for image_ref in "${old_image_refs[@]}"; do
+        docker image rm "$image_ref" || log_warn "镜像删除失败，可能仍被容器使用: $image_ref"
     done
+
+    docker image prune -f
 }
 
-# ----- 重启 Nginx -----
-restart_nginx() {
-    if [ "$RESTART_NGINX" != "1" ]; then
-        log_info "跳过 Nginx 重启（RESTART_NGINX=0）"
-        return
-    fi
-
-    log_info "测试 Nginx 配置..."
-    if nginx -t; then
-        log_info "重新加载 Nginx..."
-        nginx -s reload
-        log_info "Nginx 重新加载完成"
-    else
-        log_error "Nginx 配置测试失败，请检查 ${NGINX_CONF_FILE}"
-        exit 1
-    fi
-}
-
-# ----- 备份 -----
-backup_current() {
-    if [ -L "$CURRENT_LINK" ] && [ -d "$CURRENT_LINK" ]; then
-        local current_target
-        current_target="$(readlink "$CURRENT_LINK")"
-        log_info "备份当前版本: $current_target"
-
-        mkdir -p "$BACKUP_DIR"
-        local backup_path="$BACKUP_DIR/${TIMESTAMP}_predeploy"
-        cp -a "$RELEASES_DIR/$current_target" "$backup_path"
-        log_info "备份完成: $backup_path"
-    else
-        log_info "无当前版本需要备份"
-    fi
-}
-
-# ========================================
 echo ""
 echo "=========================================="
-echo "  $APP_NAME — 内网构建部署"
+echo "  $APP_NAME - 内网容器部署"
 echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
-echo "  版本: $TIMESTAMP"
+echo "  镜像: $APP_IMAGE"
 echo "=========================================="
 echo ""
 
 check_prerequisites
-backup_current
-build_frontend
-deploy
-restart_nginx
-cleanup_old_releases
+prepare_build_context
+build_image
+deploy_container
+cleanup_old_images
 
 echo ""
 echo "=========================================="
-log_info "构建部署完成!"
-log_info "当前版本: $TIMESTAMP"
+log_info "部署完成"
+log_info "容器: $APP_CONTAINER_NAME"
+log_info "镜像: $APP_IMAGE"
+log_info "访问端口: $APP_PORT"
 echo "=========================================="

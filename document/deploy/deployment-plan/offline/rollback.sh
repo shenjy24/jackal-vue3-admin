@@ -1,16 +1,15 @@
 #!/bin/bash
 
-# ========================================
-# jackal-vue3-admin 内网回滚脚本
-# 功能：列出可回滚版本 → 选择目标版本 → 更新 current 软链接 → 重启 Nginx
-# ========================================
-
 set -Eeuo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# ================= Usage =================
+# Roll back to a local historical image:
+#   bash rollback.sh
+#   bash rollback.sh 2
+#   bash rollback.sh jackal-vue3-admin:prod-20260624153000
 
-# ----- 加载环境配置 -----
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/deploy.env}"
 if [ -f "$ENV_FILE" ]; then
     set -a
@@ -18,13 +17,16 @@ if [ -f "$ENV_FILE" ]; then
     set +a
 fi
 
-# ----- 默认值 -----
 APP_NAME="${APP_NAME:-jackal-vue3-admin}"
-RELEASES_DIR="${RELEASES_DIR:-$PACKAGE_ROOT/releases}"
-CURRENT_LINK="${CURRENT_LINK:-$RELEASES_DIR/current}"
-RESTART_NGINX="${RESTART_NGINX:-1}"
+ENV="${ENV:-prod}"
+APP_PORT="${APP_PORT:-18080}"
+COMPOSE_FILE="${COMPOSE_FILE:-$SCRIPT_DIR/docker-compose.yml}"
+APP_CONTAINER_NAME="${APP_CONTAINER_NAME:-${APP_NAME}-${ENV}}"
+COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${APP_NAME}-${ENV}}"
+TARGET_INPUT="${1:-}"
 
-# ----- 颜色输出 -----
+export APP_CONTAINER_NAME APP_PORT
+
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 RED='\033[0;31m'
@@ -35,163 +37,114 @@ log_info()  { echo -e "${GREEN}[INFO]${NC}  $1"; }
 log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# ----- 列出可回滚版本 -----
-list_releases() {
-    local dirs
-    dirs="$(find "$RELEASES_DIR" -maxdepth 1 -type d -name '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*' | sort -r)"
-
-    if [ -z "$dirs" ]; then
-        log_error "未找到任何可回滚的版本"
-        log_info "发布目录: $RELEASES_DIR"
+check_prerequisites() {
+    if ! command -v docker >/dev/null 2>&1; then
+        log_error "未安装 Docker，请先安装 Docker"
         exit 1
     fi
 
-    local current_target=""
-    if [ -L "$CURRENT_LINK" ]; then
-        current_target="$(readlink "$CURRENT_LINK")"
+    if ! docker compose version >/dev/null 2>&1; then
+        log_error "未检测到 Docker Compose v2，请先安装或升级 Docker Compose"
+        exit 1
+    fi
+
+    if [ ! -f "$COMPOSE_FILE" ]; then
+        log_error "docker-compose.yml 不存在: $COMPOSE_FILE"
+        exit 1
+    fi
+}
+
+load_images() {
+    mapfile -t IMAGE_REFS < <(
+        docker image ls "$APP_NAME" --format "{{.Repository}}:{{.Tag}}" \
+            | awk -v env="$ENV" '$1 ~ ":" env "-" { print $1 }'
+    )
+
+    if [ "${#IMAGE_REFS[@]}" -eq 0 ]; then
+        log_error "未找到可回滚镜像: ${APP_NAME}:${ENV}-*"
+        exit 1
+    fi
+}
+
+list_images() {
+    local current_image=""
+    if docker container inspect "$APP_CONTAINER_NAME" >/dev/null 2>&1; then
+        current_image="$(docker container inspect -f '{{.Config.Image}}' "$APP_CONTAINER_NAME")"
     fi
 
     echo ""
-    echo "可回滚版本列表："
+    echo "可回滚镜像列表："
     echo "----------------------------------------"
-    local i=1
-    local names=()
-    while IFS= read -r dir; do
-        local name
-        name="$(basename "$dir")"
-        names+=("$name")
+    for i in "${!IMAGE_REFS[@]}"; do
+        local image_ref="${IMAGE_REFS[$i]}"
         local marker=""
-        if [ "$name" = "$current_target" ]; then
-            marker=" ← 当前版本"
+        if [ "$image_ref" = "$current_image" ]; then
+            marker=" <- 当前镜像"
         fi
-        if [ -d "$dir/dist" ]; then
-            local size
-            size="$(du -sh "$dir/dist" 2>/dev/null | cut -f1)"
-            echo -e "  ${CYAN}$i${NC}) $name  (${size})${marker}"
-        else
-            echo -e "  ${CYAN}$i${NC}) $name  (⚠ 无 dist/)${marker}"
-        fi
-        ((i++))
-    done <<< "$dirs"
+        echo -e "  ${CYAN}$((i + 1))${NC}) $image_ref$marker"
+    done
     echo "----------------------------------------"
     echo ""
+}
 
-    if [ "$i" -eq 1 ]; then
-        log_error "未找到有效版本"
+resolve_target() {
+    local input="$1"
+    if [[ "$input" =~ ^[0-9]+$ ]]; then
+        local idx=$((input - 1))
+        if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#IMAGE_REFS[@]}" ]; then
+            TARGET_IMAGE="${IMAGE_REFS[$idx]}"
+        else
+            log_error "序号超出范围: $input"
+            exit 1
+        fi
+    else
+        TARGET_IMAGE="$input"
+    fi
+
+    if ! docker image inspect "$TARGET_IMAGE" >/dev/null 2>&1; then
+        log_error "目标镜像不存在: $TARGET_IMAGE"
         exit 1
     fi
 }
 
-# ----- 回滚 -----
 rollback() {
-    local target="$1"
+    APP_IMAGE="$TARGET_IMAGE"
+    export APP_IMAGE
 
-    if [ ! -d "$RELEASES_DIR/$target/dist" ]; then
-        log_error "目标版本 $target 的构建产物 dist/ 不存在"
-        exit 1
-    fi
+    log_info "回滚到镜像: $APP_IMAGE"
+    docker compose -p "$COMPOSE_PROJECT_NAME" -f "$COMPOSE_FILE" up -d --no-build app-web
 
-    log_info "回滚到版本: $target"
-
-    cd "$RELEASES_DIR"
-    ln -sfn "$target" current
-    log_info "更新 current 软链接: $target"
-
-    # 确认更新成功
-    local now
-    now="$(readlink current)"
-    if [ "$now" = "$target" ]; then
-        log_info "回滚成功：当前版本 $now"
-    else
-        log_error "回滚失败：current 指向 $now，预期 $target"
+    sleep 3
+    if ! docker ps --filter "name=^/${APP_CONTAINER_NAME}$" --filter "status=running" --format "{{.Names}}" | grep -qx "$APP_CONTAINER_NAME"; then
+        log_error "容器未处于运行状态，请查看日志: docker logs --tail=200 $APP_CONTAINER_NAME"
         exit 1
     fi
 }
 
-# ----- 重启 Nginx -----
-restart_nginx() {
-    if [ "$RESTART_NGINX" != "1" ]; then
-        log_info "跳过 Nginx 重启（RESTART_NGINX=0）"
-        return
-    fi
-
-    if ! command -v nginx &>/dev/null; then
-        log_warn "未检测到 Nginx 命令，跳过重启"
-        return
-    fi
-
-    log_info "测试 Nginx 配置..."
-    if nginx -t; then
-        log_info "重新加载 Nginx..."
-        nginx -s reload
-        log_info "Nginx 重新加载完成"
-    else
-        log_error "Nginx 配置测试失败，请手动检查"
-        exit 1
-    fi
-}
-
-# ========================================
 echo ""
 echo "=========================================="
-echo "  $APP_NAME — 版本回滚"
+echo "  $APP_NAME - 容器镜像回滚"
 echo "  时间: $(date '+%Y-%m-%d %H:%M:%S')"
 echo "=========================================="
 echo ""
 
-list_releases
+check_prerequisites
+load_images
+list_images
 
-# 检查输入
-if [ $# -ge 1 ]; then
-    # 检查参数是序号还是版本名
-    if [[ "$1" =~ ^[0-9]+$ ]]; then
-        local dirs=()
-        while IFS= read -r dir; do
-            dirs+=("$(basename "$dir")")
-        done < <(find "$RELEASES_DIR" -maxdepth 1 -type d -name '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*' | sort -r)
-        local idx=$((BASH_REMATCH[1] - 1))
-        if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#dirs[@]}" ]; then
-            TARGET="${dirs[$idx]}"
-        else
-            log_error "序号超出范围: $1"
-            exit 1
-        fi
-    else
-        TARGET="$1"
-    fi
+if [ -n "$TARGET_INPUT" ]; then
+    resolve_target "$TARGET_INPUT"
 else
-    echo -n "请输入要回滚的版本序号或版本名: "
+    echo -n "请输入要回滚的镜像序号或完整镜像名: "
     read -r user_input
-    if [[ "$user_input" =~ ^[0-9]+$ ]]; then
-        local dirs=()
-        while IFS= read -r dir; do
-            dirs+=("$(basename "$dir")")
-        done < <(find "$RELEASES_DIR" -maxdepth 1 -type d -name '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]_*' | sort -r)
-        local idx=$((user_input - 1))
-        if [ "$idx" -ge 0 ] && [ "$idx" -lt "${#dirs[@]}" ]; then
-            TARGET="${dirs[$idx]}"
-        else
-            log_error "序号超出范围: $user_input"
-            exit 1
-        fi
-    else
-        TARGET="$user_input"
-    fi
+    resolve_target "$user_input"
 fi
 
-# 检查目标版本
-if [ ! -d "$RELEASES_DIR/$TARGET" ]; then
-    log_error "版本 $TARGET 不存在于 $RELEASES_DIR"
-    exit 1
-fi
-
-echo ""
-rollback "$TARGET"
-echo ""
-restart_nginx
+rollback
 
 echo ""
 echo "=========================================="
-log_info "回滚完成!"
-log_info "当前版本: $(readlink "$CURRENT_LINK")"
+log_info "回滚完成"
+log_info "容器: $APP_CONTAINER_NAME"
+log_info "镜像: $TARGET_IMAGE"
 echo "=========================================="
