@@ -1,7 +1,7 @@
 services:
   app-web:
-    image: ${APP_IMAGE}
-    container_name: ${APP_CONTAINER_NAME}
+    image: ${APP_IMAGE:-jackal-vue3-admin:prod-placeholder}
+    container_name: ${APP_CONTAINER_NAME:-jackal-vue3-admin-prod}
     pull_policy: never
     restart: unless-stopped
     logging:
@@ -12,4 +12,4 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
     ports:
-      - "${APP_PORT}:80"
+      - "${APP_PORT:-18080}:80"

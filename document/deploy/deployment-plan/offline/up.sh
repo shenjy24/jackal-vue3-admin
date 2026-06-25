@@ -5,9 +5,9 @@ set -Eeuo pipefail
 # ================= Usage =================
 # Offline deployment only depends on this directory and an uploaded dist artifact.
 # Build dist locally, upload dist or dist tarball, then run:
-#   bash deploy.sh
-#   bash deploy.sh dist
-#   bash deploy.sh jackal-vue3-admin-dist.tar.gz
+#   bash up.sh
+#   bash up.sh dist
+#   bash up.sh jackal-vue3-admin-dist.tar.gz
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -18,7 +18,7 @@ resolve_deploy_path() {
     esac
 }
 
-ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/deploy.env}"
+ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/app.env}"
 if [ -f "$ENV_FILE" ]; then
     set -a
     . "$ENV_FILE"
@@ -122,7 +122,7 @@ find_dist_package() {
     log_error "未能唯一定位 dist 部署包"
     echo "请将本地 npm run build 产生的 dist 目录或压缩包上传到: $DIST_DIR"
     echo "支持: dist/、dist.tar.gz、dist.tgz、dist.zip、jackal-vue3-admin-dist*.tar.gz、jackal-vue3-admin-dist*.zip"
-    echo "也可以显式指定: bash deploy.sh <dist目录或压缩包>"
+    echo "也可以显式指定: bash up.sh <dist目录或压缩包>"
     if [ "${#candidates[@]}" -gt 1 ]; then
         echo "匹配到多个候选包:"
         printf '  %s\n' "${candidates[@]}"

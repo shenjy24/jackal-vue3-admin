@@ -11,7 +11,7 @@ set -Eeuo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ----- 加载环境配置 -----
-ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/deploy.env}"
+ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/app.env}"
 if [ -f "$ENV_FILE" ]; then
     set -a
     . "$ENV_FILE"
