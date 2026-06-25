@@ -20,6 +20,7 @@ RUN set -eux; \
              /var/cache/nginx/uwsgi_temp \
              /var/cache/nginx/scgi_temp \
              /var/run; \
+    sed -i 's#^pid .*#pid /tmp/nginx.pid;#' /etc/nginx/nginx.conf; \
     chown -R "${APP_UID}:${APP_GID}" /var/cache/nginx /var/run /usr/share/nginx/html /etc/nginx/conf.d
 
 COPY --chown=${APP_UID}:${APP_GID} ${DIST_DIR}/ /usr/share/nginx/html/
@@ -29,4 +30,4 @@ USER ${APP_UID}:${APP_GID}
 
 EXPOSE 80
 
-CMD ["nginx", "-g", "pid /tmp/nginx.pid; daemon off;"]
+CMD ["nginx", "-g", "daemon off;"]
