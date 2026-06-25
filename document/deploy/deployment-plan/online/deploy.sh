@@ -9,7 +9,6 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 # ----- 加载环境配置 -----
 ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/deploy.env}"
@@ -24,11 +23,14 @@ APP_NAME="${APP_NAME:-jackal-vue3-admin}"
 ENV="${ENV:-prod}"
 GIT_REMOTE="${GIT_REMOTE:-origin}"
 BRANCH_NAME="${BRANCH_NAME:-main}"
+REPO_NAME="${REPO_NAME:-jackal-vue3-admin}"
 NODE_IMAGE="${NODE_IMAGE:-node:24.17.0-slim}"
 NGINX_IMAGE="${NGINX_IMAGE:-nginx:1.30.2-alpine}"
 APP_PORT="${APP_PORT:-18080}"
 IMAGE_KEEP_COUNT="${IMAGE_KEEP_COUNT:-5}"
 
+DEPLOY_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+PACKAGE_ROOT="${REPO_PATH:-$DEPLOY_ROOT/$REPO_NAME}"
 APP_CONTAINER_NAME="${APP_CONTAINER_NAME:-${APP_NAME}-${ENV}}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-${APP_NAME}-${ENV}}"
 COMPOSE_FILE="${COMPOSE_FILE:-$SCRIPT_DIR/docker-compose.yml}"
