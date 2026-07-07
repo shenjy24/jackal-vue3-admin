@@ -13,3 +13,9 @@ services:
       TZ: ${TZ:-Asia/Shanghai}
     ports:
       - "${APP_PORT:-18080}:80"
+    deploy:
+      resources:
+        limits:
+          memory: ${APP_MEMORY_LIMIT:-512M}
+        reservations:
+          memory: ${APP_MEMORY_RESERVATION:-256M}
