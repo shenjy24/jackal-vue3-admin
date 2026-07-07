@@ -9,6 +9,13 @@ set -Eeuo pipefail
 #   bash rollback.sh jackal-vue3-admin:prod-20260624153000
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RELEASE_STATE_FILE="$SCRIPT_DIR/release-state"
+
+if [ -f "$RELEASE_STATE_FILE" ]; then
+    set -a
+    . "$RELEASE_STATE_FILE"
+    set +a
+fi
 
 ENV_FILE="${ENV_FILE:-$SCRIPT_DIR/app.env}"
 if [ -f "$ENV_FILE" ]; then
@@ -118,6 +125,15 @@ rollback() {
     if ! docker ps --filter "name=^/${APP_CONTAINER_NAME}$" --filter "status=running" --format "{{.Names}}" | grep -qx "$APP_CONTAINER_NAME"; then
         log_error "容器未处于运行状态，请查看日志: docker logs --tail=200 $APP_CONTAINER_NAME"
         exit 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        if ! curl -fsS "http://127.0.0.1:$APP_PORT/" >/dev/null; then
+            log_error "前端页面探测失败: http://127.0.0.1:$APP_PORT/"
+            exit 1
+        fi
+    else
+        log_warn "未安装 curl，跳过前端页面探测"
     fi
 }
 

@@ -42,6 +42,7 @@ BUILD_TIME="$(date +%Y%m%d%H%M%S)"
 APP_IMAGE="${APP_IMAGE:-${APP_NAME}:${ENV}-${BUILD_TIME}}"
 BUILD_CONTEXT=""
 ARCHIVE_TMP_DIR=""
+RELEASE_STATE_FILE="$SCRIPT_DIR/release-state"
 
 export APP_CONTAINER_NAME APP_PORT APP_IMAGE
 
@@ -103,16 +104,15 @@ find_dist_package() {
         return
     fi
 
-    if [ -d "$DIST_DIR/dist" ]; then
-        PACKAGE_PATH="$DIST_DIR/dist"
-        return
-    fi
-
     mapfile -t candidates < <(
         find "$DIST_DIR" -maxdepth 1 -type f \
             \( -name 'dist.tar.gz' -o -name 'dist.tgz' -o -name 'jackal-vue3-admin-dist*.tar.gz' -o -name 'jackal-vue3-admin-dist*.tgz' -o -name 'dist.zip' -o -name 'jackal-vue3-admin-dist*.zip' \) \
             | sort
     )
+
+    if [ -d "$DIST_DIR/dist" ]; then
+        candidates=("$DIST_DIR/dist" "${candidates[@]}")
+    fi
 
     if [ "${#candidates[@]}" -eq 1 ]; then
         PACKAGE_PATH="${candidates[0]}"
@@ -193,8 +193,7 @@ build_image() {
         --build-arg "NGINX_IMAGE=$NGINX_IMAGE" \
         -t "$APP_IMAGE" \
         "$BUILD_CONTEXT"
-
-    cat > "$SCRIPT_DIR/app-image.env" <<EOF
+    cat > "$RELEASE_STATE_FILE" <<EOF
 APP_IMAGE=$APP_IMAGE
 DIST_PACKAGE=$PACKAGE_PATH
 BUILD_TIME=$BUILD_TIME
@@ -211,6 +210,15 @@ deploy_container() {
     if ! docker ps --filter "name=^/${APP_CONTAINER_NAME}$" --filter "status=running" --format "{{.Names}}" | grep -qx "$APP_CONTAINER_NAME"; then
         log_error "容器未处于运行状态，请查看日志: docker logs --tail=200 $APP_CONTAINER_NAME"
         exit 1
+    fi
+
+    if command -v curl >/dev/null 2>&1; then
+        if ! curl -fsS "http://127.0.0.1:$APP_PORT/" >/dev/null; then
+            log_error "前端页面探测失败: http://127.0.0.1:$APP_PORT/"
+            exit 1
+        fi
+    else
+        log_warn "未安装 curl，跳过前端页面探测"
     fi
 }
 
