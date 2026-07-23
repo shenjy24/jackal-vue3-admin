@@ -32,8 +32,8 @@ export default {
   },
   permission: {
     addTitle: "新增权限", editTitle: "编辑权限", parent: "父级权限", type: "权限类型",
-    menuType: "菜单", buttonType: "按钮",
-    componentTip: "叶子菜单填写相对 src/views 的无扩展名路径；目录菜单留空。",
+    directoryType: "目录", menuType: "菜单", buttonType: "按钮",
+    componentTip: "菜单填写相对 src/views 的无扩展名路径；目录和按钮留空。",
     confirmDelete: "确认删除权限“{name}”吗？"
   },
   error: { forbidden: "403 无权限", notFound: "404 页面不存在" }

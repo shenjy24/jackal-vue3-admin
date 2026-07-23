@@ -34,8 +34,8 @@ export default {
   },
   permission: {
     addTitle: "Add Permission", editTitle: "Edit Permission", parent: "Parent Permission",
-    type: "Permission Type", menuType: "Menu", buttonType: "Button",
-    componentTip: "Leaf menus use a path relative to src/views without an extension; directories leave it empty.",
+    type: "Permission Type", directoryType: "Directory", menuType: "Menu", buttonType: "Button",
+    componentTip: "Menus use a path relative to src/views without an extension; directories and buttons leave it empty.",
     confirmDelete: "Delete permission '{name}'?"
   },
   error: { forbidden: "403 Forbidden", notFound: "404 Not Found" }

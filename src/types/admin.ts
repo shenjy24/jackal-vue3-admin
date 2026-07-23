@@ -49,8 +49,9 @@ export interface AuthRoleVo {
 }
 
 export enum PermType {
-  MENU = 1,
-  BUTTON = 2
+  DIRECTORY = 1,
+  MENU = 2,
+  BUTTON = 3
 }
 
 export interface AuthPermVo {
@@ -71,6 +72,7 @@ export interface AuthMenuVo {
   parentId: AdminId;
   code?: string;
   name: string;
+  type?: PermType;
   icon?: string;
   path?: string;
   component?: string;

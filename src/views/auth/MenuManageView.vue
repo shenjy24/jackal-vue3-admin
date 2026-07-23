@@ -29,6 +29,12 @@ const filters = reactive<{ code: string; name: string; type?: PermType }>({ code
 const pagination = reactive({ pageNum: 1, pageSize: 20, total: 0 });
 const form = reactive<AuthPermQo>(emptyForm());
 
+const permissionTypeTagMap = {
+  [PermType.DIRECTORY]: "info",
+  [PermType.MENU]: "primary",
+  [PermType.BUTTON]: "success"
+} as const;
+
 function emptyForm(): AuthPermQo {
   return {
     parentId: 0,
@@ -41,6 +47,16 @@ function emptyForm(): AuthPermQo {
     sort: 0,
     remark: ""
   };
+}
+
+function permissionTypeLabel(type: PermType) {
+  if (type === PermType.DIRECTORY) return t("permission.directoryType");
+  if (type === PermType.MENU) return t("permission.menuType");
+  return t("permission.buttonType");
+}
+
+function permissionTypeTag(type: PermType) {
+  return permissionTypeTagMap[type];
 }
 
 async function load() {
@@ -110,8 +126,8 @@ async function save() {
     ...form,
     id: editingId.value,
     component: form.type === PermType.MENU ? form.component || undefined : undefined,
-    icon: form.type === PermType.MENU ? form.icon || undefined : undefined,
-    path: form.type === PermType.MENU ? form.path || undefined : undefined
+    icon: form.type !== PermType.BUTTON ? form.icon || undefined : undefined,
+    path: form.type !== PermType.BUTTON ? form.path || undefined : undefined
   };
 
   submitting.value = true;
@@ -160,6 +176,7 @@ onMounted(load);
       </el-form-item>
       <el-form-item :label="t('permission.type')">
         <el-select v-model="filters.type" clearable style="width: 140px">
+          <el-option :label="t('permission.directoryType')" :value="PermType.DIRECTORY" />
           <el-option :label="t('permission.menuType')" :value="PermType.MENU" />
           <el-option :label="t('permission.buttonType')" :value="PermType.BUTTON" />
         </el-select>
@@ -171,8 +188,8 @@ onMounted(load);
       <el-table-column prop="name" :label="t('crud.name')" min-width="150" />
       <el-table-column :label="t('permission.type')" width="100">
         <template #default="{ row }">
-          <el-tag :type="row.type === PermType.MENU ? 'primary' : 'success'">
-            {{ row.type === PermType.MENU ? t("permission.menuType") : t("permission.buttonType") }}
+          <el-tag :type="permissionTypeTag(row.type)">
+            {{ permissionTypeLabel(row.type) }}
           </el-tag>
         </template>
       </el-table-column>
@@ -221,6 +238,7 @@ onMounted(load);
         </el-form-item>
         <el-form-item :label="t('permission.type')" required>
           <el-radio-group v-model="form.type">
+            <el-radio :value="PermType.DIRECTORY">{{ t("permission.directoryType") }}</el-radio>
             <el-radio :value="PermType.MENU">{{ t("permission.menuType") }}</el-radio>
             <el-radio :value="PermType.BUTTON">{{ t("permission.buttonType") }}</el-radio>
           </el-radio-group>
@@ -231,14 +249,14 @@ onMounted(load);
         <el-form-item :label="t('crud.name')" required>
           <el-input v-model="form.name" />
         </el-form-item>
-        <template v-if="form.type === PermType.MENU">
+        <template v-if="form.type !== PermType.BUTTON">
           <el-form-item :label="t('crud.icon')">
             <el-input v-model="form.icon" />
           </el-form-item>
           <el-form-item :label="t('crud.path')">
-            <el-input v-model="form.path" placeholder="/auth/user" />
+            <el-input v-model="form.path" :placeholder="form.type === PermType.DIRECTORY ? '/auth' : '/auth/user'" />
           </el-form-item>
-          <el-form-item :label="t('crud.component')">
+          <el-form-item v-if="form.type === PermType.MENU" :label="t('crud.component')">
             <el-input v-model="form.component" placeholder="auth/UserManageView" />
             <div class="form-tip">{{ t("permission.componentTip") }}</div>
           </el-form-item>

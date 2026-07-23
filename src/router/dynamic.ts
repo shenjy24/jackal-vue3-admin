@@ -2,7 +2,7 @@ import { RouterView, type RouteRecordRaw } from "vue-router";
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { i18n } from "@/i18n";
 import { resolveMenuComponent } from "./componentMap";
-import type { AuthMenuVo } from "@/types/admin";
+import { PermType, type AuthMenuVo } from "@/types/admin";
 
 export const ADMIN_ROUTE_NAME = "AdminRoot";
 
@@ -31,7 +31,7 @@ export function menusToRoutes(menus: AuthMenuVo[]): RouteRecordRaw[] {
     .sort((left, right) => (left.sort ?? 0) - (right.sort ?? 0))
     .flatMap((menu) => {
       const children = menu.children?.length ? menusToRoutes(menu.children) : [];
-      const isDirectory = children.length > 0;
+      const isDirectory = menu.type === PermType.DIRECTORY || children.length > 0;
       const component = isDirectory ? RouterView : resolveMenuComponent(menu.component);
 
       if (!isDirectory && !component) {
@@ -68,7 +68,7 @@ export function firstMenuPath(menus: AuthMenuVo[]): string | undefined {
   for (const menu of menus) {
     const childPath = menu.children?.length ? firstMenuPath(menu.children) : undefined;
     if (childPath) return childPath;
-    if (menu.component && menu.path) return normalizeRoutePath(menu.path);
+    if (menu.type !== PermType.DIRECTORY && menu.component && menu.path) return normalizeRoutePath(menu.path);
   }
   return undefined;
 }

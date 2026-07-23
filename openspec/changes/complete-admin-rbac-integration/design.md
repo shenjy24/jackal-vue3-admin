@@ -41,7 +41,7 @@
 
 ### 按页面菜单 ID 延迟加载按钮权限
 
-`listAuthMenu` 只返回 `PermType.MENU` 节点，按钮权限通过 `POST /admin/auth/listAuthButton` 和 `{ permId }` 获取。路由元数据保存对应菜单 ID；进入受保护页面前，路由守卫加载该菜单的按钮列表并缓存为 `menuId -> permissionCodes`。`v-permission` 和程序化检查读取当前页面缓存。
+`listAuthMenu` 返回 `PermType.DIRECTORY` 和 `PermType.MENU` 节点，目录只展开子节点，菜单挂载页面组件；按钮权限通过 `POST /admin/auth/listAuthButton` 和 `{ permId }` 获取。路由元数据保存对应菜单 ID；进入受保护页面前，路由守卫加载该菜单的按钮列表并缓存为 `menuId -> permissionCodes`。`v-permission` 和程序化检查读取当前页面缓存。
 
 缓存会在退出登录、会话失效和重新恢复会话时清空。完成角色权限修改后，不尝试修改其他已登录用户的前端缓存；其权限在下次刷新或重新登录时生效。
 
