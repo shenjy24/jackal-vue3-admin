@@ -36,8 +36,10 @@ export default {
     confirmDelete: "确认删除角色“{name}”吗？"
   },
   permission: {
-    addTitle: "新增权限", editTitle: "编辑权限", parent: "父级权限", type: "权限类型",
+    addTitle: "新增权限", editTitle: "编辑权限", parent: "父级权限", type: "权限类型", root: "根目录",
     directoryType: "目录", menuType: "菜单", buttonType: "按钮",
+    selectIcon: "请选择图标", searchIcon: "请输入图标名称", noMatchingIcon: "未找到匹配的图标",
+    currentParent: "当前父节点", parentTip: "点击树节点选择父节点；按钮不能作为父节点。",
     componentTip: "菜单填写相对 src/views 的无扩展名路径；目录和按钮留空。",
     confirmDelete: "确认删除权限“{name}”吗？"
   },

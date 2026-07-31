@@ -1,23 +1,12 @@
 import type { Component } from "vue";
-import {
-  House,
-  Lock,
-  Menu as MenuIcon,
-  Setting,
-  User,
-  UserFilled
-} from "@element-plus/icons-vue";
+import * as ElementPlusIconsVue from "@element-plus/icons-vue";
 
 const viewModules = import.meta.glob("/src/views/**/*.vue");
 
-const iconMap: Record<string, Component> = {
-  house: House,
-  setting: Setting,
-  user: User,
-  team: UserFilled,
-  lock: Lock,
-  menu: MenuIcon
-};
+const iconMap = Object.entries(ElementPlusIconsVue).reduce<Record<string, Component>>((map, [name, component]) => {
+  map[name.toLowerCase()] = component;
+  return map;
+}, {});
 
 export function resolveMenuComponent(component?: string) {
   const value = component?.trim();
@@ -36,6 +25,6 @@ export function resolveMenuComponent(component?: string) {
 }
 
 export function resolveMenuIcon(key?: string) {
-  if (!key) return MenuIcon;
-  return iconMap[key.toLowerCase()] || MenuIcon;
+  const normalizedKey = key?.trim().toLowerCase();
+  return normalizedKey ? iconMap[normalizedKey] : undefined;
 }

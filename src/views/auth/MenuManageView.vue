@@ -1,46 +1,66 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
-import { Plus } from "@element-plus/icons-vue";
+import { computed, onMounted, reactive, ref, type Component } from "vue";
+import { Plus, Search } from "@element-plus/icons-vue";
+import * as ElementPlusIconsVue from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
-import CrudDialog from "@/components/crud/CrudDialog.vue";
 import QueryBar from "@/components/crud/QueryBar.vue";
 import {
   deleteAuthPerm,
   getAuthPerm,
   listAuthPerm,
-  queryAuthPerm,
   saveAuthPerm,
   updateAuthPerm
 } from "@/api/auth";
 import { hasPermission } from "@/utils/permissions";
-import { PermType, type AdminId, type AuthMenuVo, type AuthPermQo, type AuthPermVo } from "@/types/admin";
+import { PermType, type AdminId, type AuthMenuVo, type AuthPermQo } from "@/types/admin";
 
 defineOptions({ name: "MenuManageView" });
 
 const { t } = useI18n();
+const iconComponents = ElementPlusIconsVue as Record<string, Component>;
+const iconNames = Object.keys(iconComponents).sort();
+const defaultIconName = "Menu";
+const treeProps = { children: "children", label: "name" };
+
 const loading = ref(false);
 const submitting = ref(false);
 const dialogVisible = ref(false);
+const iconPickerVisible = ref(false);
 const editingId = ref<AdminId>();
-const rows = ref<AuthPermVo[]>([]);
 const permissionTree = ref<AuthMenuVo[]>([]);
 const filters = reactive<{ code: string; name: string; type?: PermType }>({ code: "", name: "" });
-const pagination = reactive({ pageNum: 1, pageSize: 20, total: 0 });
+const iconKeyword = ref("");
 const form = reactive<AuthPermQo>(emptyForm());
 
-const permissionTypeTagMap = {
-  [PermType.DIRECTORY]: "info",
-  [PermType.MENU]: "primary",
-  [PermType.BUTTON]: "success"
-} as const;
+const parentOptions = computed<AuthMenuVo[]>(() => [
+  {
+    id: 0,
+    parentId: 0,
+    name: t("permission.root"),
+    type: PermType.DIRECTORY,
+    children: buildParentOptions(permissionTree.value, editingId.value)
+  }
+]);
+const filteredPermissionTree = computed(() => filterPermissionTree(permissionTree.value));
+const filteredIconNames = computed(() => {
+  const keyword = iconKeyword.value.trim().toLowerCase();
+  return keyword ? iconNames.filter((name) => name.toLowerCase().includes(keyword)) : iconNames;
+});
+const selectedIconName = computed(() =>
+  form.icon && iconComponents[form.icon] ? form.icon : defaultIconName
+);
+const selectedIconComponent = computed(() => iconComponents[selectedIconName.value]);
+const selectedParentName = computed(
+  () => findNodeName(parentOptions.value, form.parentId) || t("permission.root")
+);
 
 function emptyForm(): AuthPermQo {
   return {
     parentId: 0,
     code: "",
     name: "",
-    type: PermType.MENU,
+    type: PermType.DIRECTORY,
     icon: "",
     path: "",
     component: "",
@@ -49,60 +69,55 @@ function emptyForm(): AuthPermQo {
   };
 }
 
-function permissionTypeLabel(type: PermType) {
+function permissionTypeLabel(type?: PermType) {
   if (type === PermType.DIRECTORY) return t("permission.directoryType");
   if (type === PermType.MENU) return t("permission.menuType");
-  return t("permission.buttonType");
+  if (type === PermType.BUTTON) return t("permission.buttonType");
+  return "-";
 }
 
-function permissionTypeTag(type: PermType) {
-  return permissionTypeTagMap[type];
+function permissionTypeTag(type?: PermType) {
+  if (type === PermType.DIRECTORY) return "info";
+  if (type === PermType.MENU) return "primary";
+  return "success";
 }
 
-async function load() {
+function iconComponent(name?: string) {
+  return name ? iconComponents[name] : undefined;
+}
+
+async function loadPermissionTree() {
   loading.value = true;
   try {
-    const page = await queryAuthPerm({
-      code: filters.code || undefined,
-      name: filters.name || undefined,
-      type: filters.type,
-      pageNum: pagination.pageNum,
-      pageSize: pagination.pageSize
-    });
-    rows.value = page.content;
-    pagination.total = Number(page.total ?? 0);
+    permissionTree.value = await listAuthPerm();
   } finally {
     loading.value = false;
   }
 }
 
 function search() {
-  pagination.pageNum = 1;
-  return load();
+  // Tree filtering is reactive; the action remains available for keyboard and button use.
 }
 
 function resetFilters() {
   filters.code = "";
   filters.name = "";
   filters.type = undefined;
-  return search();
-}
-
-async function loadPermissionTree() {
-  permissionTree.value = await listAuthPerm();
 }
 
 async function openCreate() {
   if (!hasPermission("auth:perm:save")) return;
   editingId.value = undefined;
   Object.assign(form, emptyForm());
-  await loadPermissionTree();
+  iconKeyword.value = "";
+  iconPickerVisible.value = false;
+  if (!permissionTree.value.length) await loadPermissionTree();
   dialogVisible.value = true;
 }
 
-async function openEdit(row: AuthPermVo) {
+async function openEdit(row: AuthMenuVo) {
   if (!hasPermission("auth:perm:update")) return;
-  const [permission] = await Promise.all([getAuthPerm({ id: row.id }), loadPermissionTree()]);
+  const permission = await getAuthPerm({ id: row.id });
   editingId.value = permission.id;
   Object.assign(form, {
     id: permission.id,
@@ -116,18 +131,70 @@ async function openEdit(row: AuthPermVo) {
     sort: permission.sort ?? 0,
     remark: permission.remark || ""
   });
+  iconKeyword.value = "";
+  iconPickerVisible.value = false;
   dialogVisible.value = true;
+}
+
+function selectIcon(iconName: string) {
+  form.icon = iconName;
+  iconPickerVisible.value = false;
+}
+
+function clearIcon() {
+  form.icon = "";
+}
+
+function buildParentOptions(nodes: AuthMenuVo[], excludedId?: AdminId): AuthMenuVo[] {
+  return nodes
+    .filter((node) => node.type !== PermType.BUTTON && node.id !== excludedId)
+    .map((node) => ({ ...node, children: buildParentOptions(node.children || [], excludedId) }));
+}
+
+function findNodeName(nodes: AuthMenuVo[], id: AdminId): string | undefined {
+  for (const node of nodes) {
+    if (node.id === id) return node.name;
+    const childName = findNodeName(node.children || [], id);
+    if (childName) return childName;
+  }
+  return undefined;
+}
+
+function selectParentNode(node: AuthMenuVo) {
+  form.parentId = node.id;
+}
+
+function filterPermissionTree(nodes: AuthMenuVo[]): AuthMenuVo[] {
+  const code = filters.code.trim().toLowerCase();
+  const name = filters.name.trim().toLowerCase();
+  const type = filters.type;
+  if (!code && !name && type === undefined) return nodes;
+
+  return nodes.reduce<AuthMenuVo[]>((result, node) => {
+    const children = filterPermissionTree(node.children || []);
+    const matched =
+      (!code || node.code?.toLowerCase().includes(code)) &&
+      (!name || node.name.toLowerCase().includes(name)) &&
+      (type === undefined || node.type === type);
+    if (matched || children.length) result.push({ ...node, children });
+    return result;
+  }, []);
 }
 
 async function save() {
   const permission = editingId.value ? "auth:perm:update" : "auth:perm:save";
-  if (!hasPermission(permission) || !form.name) return;
+  if (!hasPermission(permission) || !form.name.trim()) return;
   const payload: AuthPermQo = {
-    ...form,
     id: editingId.value,
-    component: form.type === PermType.MENU ? form.component || undefined : undefined,
-    icon: form.type !== PermType.BUTTON ? form.icon || undefined : undefined,
-    path: form.type !== PermType.BUTTON ? form.path || undefined : undefined
+    parentId: form.parentId,
+    code: form.code?.trim() || undefined,
+    name: form.name.trim(),
+    type: form.type,
+    icon: form.type === PermType.BUTTON ? undefined : form.icon?.trim() || undefined,
+    path: form.type === PermType.MENU ? form.path?.trim() || undefined : undefined,
+    component: form.type === PermType.MENU ? form.component?.trim() || undefined : undefined,
+    sort: form.sort ?? 0,
+    remark: form.remark?.trim() || undefined
   };
 
   submitting.value = true;
@@ -139,23 +206,23 @@ async function save() {
     }
     dialogVisible.value = false;
     ElMessage.success(t("common.saveSuccess"));
-    await load();
+    await loadPermissionTree();
   } finally {
     submitting.value = false;
   }
 }
 
-async function remove(row: AuthPermVo) {
+async function remove(row: AuthMenuVo) {
   if (!hasPermission("auth:perm:delete")) return;
   await ElMessageBox.confirm(t("permission.confirmDelete", { name: row.name }), t("common.delete"), {
     type: "warning"
   });
   await deleteAuthPerm({ id: row.id });
   ElMessage.success(t("common.deleteSuccess"));
-  await load();
+  await loadPermissionTree();
 }
 
-onMounted(load);
+onMounted(loadPermissionTree);
 </script>
 
 <template>
@@ -169,7 +236,7 @@ onMounted(load);
           <el-input v-model="filters.name" clearable :placeholder="t('crud.name')" />
         </el-form-item>
         <el-form-item :label="t('permission.type')">
-          <el-select v-model="filters.type" clearable :placeholder="t('permission.type')" style="width: 140px">
+          <el-select v-model="filters.type" clearable :placeholder="t('permission.type')" class="permission-type-select">
             <el-option :label="t('permission.directoryType')" :value="PermType.DIRECTORY" />
             <el-option :label="t('permission.menuType')" :value="PermType.MENU" />
             <el-option :label="t('permission.buttonType')" :value="PermType.BUTTON" />
@@ -182,105 +249,231 @@ onMounted(load);
     </div>
 
     <section class="list-card">
-      <el-table v-loading="loading" :data="rows" row-key="id">
-      <el-table-column prop="code" :label="t('crud.code')" min-width="190" />
-      <el-table-column prop="name" :label="t('crud.name')" min-width="150" />
-      <el-table-column :label="t('permission.type')" width="100">
-        <template #default="{ row }">
-          <el-tag :type="permissionTypeTag(row.type)">
-            {{ permissionTypeLabel(row.type) }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="path" :label="t('crud.path')" min-width="150" show-overflow-tooltip />
-      <el-table-column prop="component" :label="t('crud.component')" min-width="190" show-overflow-tooltip />
-      <el-table-column prop="sort" :label="t('crud.sort')" width="90" />
-      <el-table-column prop="remark" :label="t('crud.remark')" min-width="180" show-overflow-tooltip />
-      <el-table-column :label="t('common.actions')" width="180" fixed="right">
-        <template #default="{ row }">
-          <el-button v-permission="'auth:perm:update'" link type="primary" @click="openEdit(row)">
-            {{ t("common.edit") }}
-          </el-button>
-          <el-button v-permission="'auth:perm:delete'" link type="danger" @click="remove(row)">
-            {{ t("common.delete") }}
-          </el-button>
-        </template>
-      </el-table-column>
+      <el-table
+        v-loading="loading"
+        :data="filteredPermissionTree"
+        row-key="id"
+        default-expand-all
+        :tree-props="treeProps"
+      >
+        <el-table-column prop="name" :label="t('crud.name')" min-width="160" />
+        <el-table-column prop="code" :label="t('crud.code')" min-width="180" show-overflow-tooltip />
+        <el-table-column :label="t('permission.type')" width="100">
+          <template #default="{ row }">
+            <el-tag :type="permissionTypeTag(row.type)">
+              {{ permissionTypeLabel(row.type) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="path" :label="t('crud.path')" min-width="180" show-overflow-tooltip />
+        <el-table-column prop="component" :label="t('crud.component')" min-width="220" show-overflow-tooltip />
+        <el-table-column :label="t('crud.icon')" width="90">
+          <template #default="{ row }">
+            <el-icon v-if="iconComponent(row.icon)" :size="18">
+              <component :is="iconComponent(row.icon)" />
+            </el-icon>
+            <span v-else>-</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="sort" :label="t('crud.sort')" width="90" />
+        <el-table-column prop="remark" :label="t('crud.remark')" min-width="180" show-overflow-tooltip />
+        <el-table-column :label="t('common.actions')" width="180" fixed="right">
+          <template #default="{ row }">
+            <el-button v-permission="'auth:perm:update'" link type="primary" @click="openEdit(row)">
+              {{ t("common.edit") }}
+            </el-button>
+            <el-button v-permission="'auth:perm:delete'" link type="danger" @click="remove(row)">
+              {{ t("common.delete") }}
+            </el-button>
+          </template>
+        </el-table-column>
       </el-table>
-
-      <div class="list-card__pager">
-        <el-pagination
-          v-model:current-page="pagination.pageNum"
-          v-model:page-size="pagination.pageSize"
-          background
-          :hide-on-single-page="false"
-          layout="total, sizes, prev, pager, next"
-          :page-sizes="[10, 20, 50]"
-          :total="pagination.total"
-          @current-change="load"
-          @size-change="search"
-        />
-      </div>
     </section>
 
-    <CrudDialog
+    <el-dialog
       v-model="dialogVisible"
       :title="editingId ? t('permission.editTitle') : t('permission.addTitle')"
-      :loading="submitting"
-      @save="save"
+      width="560px"
+      class="admin-form-dialog"
+      :close-on-click-modal="false"
     >
-      <el-form :model="form" label-width="112px">
-        <el-form-item :label="t('permission.parent')">
-          <el-tree-select
-            v-model="form.parentId"
-            :data="permissionTree"
-            node-key="id"
-            check-strictly
-            :render-after-expand="false"
-            :props="{ children: 'children', label: 'name', value: 'id' }"
-            style="width: 100%"
-          />
-        </el-form-item>
+      <el-form :model="form" label-position="top">
         <el-form-item :label="t('permission.type')" required>
           <el-radio-group v-model="form.type">
-            <el-radio :value="PermType.DIRECTORY">{{ t("permission.directoryType") }}</el-radio>
-            <el-radio :value="PermType.MENU">{{ t("permission.menuType") }}</el-radio>
-            <el-radio :value="PermType.BUTTON">{{ t("permission.buttonType") }}</el-radio>
+            <el-radio-button :value="PermType.DIRECTORY">{{ t("permission.directoryType") }}</el-radio-button>
+            <el-radio-button :value="PermType.MENU">{{ t("permission.menuType") }}</el-radio-button>
+            <el-radio-button :value="PermType.BUTTON">{{ t("permission.buttonType") }}</el-radio-button>
           </el-radio-group>
         </el-form-item>
         <el-form-item :label="t('crud.code')">
-          <el-input v-model="form.code" />
+          <el-input v-model="form.code" maxlength="128" show-word-limit />
         </el-form-item>
         <el-form-item :label="t('crud.name')" required>
-          <el-input v-model="form.name" />
+          <el-input v-model="form.name" maxlength="128" show-word-limit />
         </el-form-item>
         <template v-if="form.type !== PermType.BUTTON">
           <el-form-item :label="t('crud.icon')">
-            <el-input v-model="form.icon" />
+            <el-popover
+              v-model:visible="iconPickerVisible"
+              trigger="click"
+              placement="bottom-start"
+              :width="500"
+              popper-class="menu-icon-picker-popper"
+            >
+              <template #reference>
+                <el-input
+                  :model-value="form.icon"
+                  readonly
+                  clearable
+                  :placeholder="t('permission.selectIcon')"
+                  class="menu-icon-input"
+                  @clear="clearIcon"
+                >
+                  <template #prefix>
+                    <el-icon><component :is="selectedIconComponent" /></el-icon>
+                  </template>
+                </el-input>
+              </template>
+              <el-input v-model="iconKeyword" clearable :placeholder="t('permission.searchIcon')" class="menu-icon-picker__search">
+                <template #suffix><el-icon><Search /></el-icon></template>
+              </el-input>
+              <div class="menu-icon-picker__list">
+                <button
+                  v-for="iconName in filteredIconNames"
+                  :key="iconName"
+                  type="button"
+                  class="menu-icon-picker__item"
+                  :class="{ 'menu-icon-picker__item--selected': form.icon === iconName }"
+                  :title="iconName"
+                  @click="selectIcon(iconName)"
+                >
+                  <el-icon><component :is="iconComponent(iconName)" /></el-icon>
+                  <span>{{ iconName }}</span>
+                </button>
+                <el-empty v-if="!filteredIconNames.length" :description="t('permission.noMatchingIcon')" :image-size="56" />
+              </div>
+            </el-popover>
           </el-form-item>
+        </template>
+        <template v-if="form.type === PermType.MENU">
           <el-form-item :label="t('crud.path')">
-            <el-input v-model="form.path" :placeholder="form.type === PermType.DIRECTORY ? '/auth' : '/auth/user'" />
+            <el-input v-model="form.path" maxlength="255" show-word-limit placeholder="/auth/user" />
           </el-form-item>
-          <el-form-item v-if="form.type === PermType.MENU" :label="t('crud.component')">
-            <el-input v-model="form.component" placeholder="auth/UserManageView" />
+          <el-form-item :label="t('crud.component')">
+            <el-input v-model="form.component" maxlength="255" show-word-limit placeholder="auth/UserManageView" />
             <div class="form-tip">{{ t("permission.componentTip") }}</div>
           </el-form-item>
         </template>
         <el-form-item :label="t('crud.sort')">
-          <el-input-number v-model="form.sort" :min="0" />
+          <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" />
         </el-form-item>
         <el-form-item :label="t('crud.remark')">
-          <el-input v-model="form.remark" type="textarea" />
+          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="255" show-word-limit />
+        </el-form-item>
+        <el-form-item :label="t('permission.parent')">
+          <div class="permission-parent-box">
+            <div class="permission-parent-current">
+              <span>{{ t("permission.currentParent") }}</span>
+              <el-tag>{{ selectedParentName }}</el-tag>
+            </div>
+            <el-tree
+              :data="parentOptions"
+              :props="treeProps"
+              node-key="id"
+              highlight-current
+              :current-node-key="form.parentId"
+              :expand-on-click-node="false"
+              @node-click="selectParentNode"
+            />
+          </div>
+          <div class="form-tip">{{ t("permission.parentTip") }}</div>
         </el-form-item>
       </el-form>
-    </CrudDialog>
+      <template #footer>
+        <el-button @click="dialogVisible = false">{{ t("common.cancel") }}</el-button>
+        <el-button type="primary" :loading="submitting" @click="save">{{ t("common.save") }}</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
 <style scoped>
+.permission-type-select {
+  width: 120px;
+}
+
+.permission-parent-box {
+  width: 100%;
+  max-height: 280px;
+  overflow: auto;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  padding: 10px;
+}
+
+.permission-parent-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.menu-icon-input {
+  width: 100%;
+}
+
 .form-tip {
+  margin-top: 6px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 1.5;
+}
+
+:global(.menu-icon-picker-popper) {
+  padding: 12px;
+}
+
+:global(.menu-icon-picker__search) {
+  margin-bottom: 10px;
+}
+
+:global(.menu-icon-picker__list) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  max-height: 220px;
+  overflow-y: auto;
+  gap: 2px;
+  padding-right: 4px;
+}
+
+:global(.menu-icon-picker__item) {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  padding: 7px 8px;
+  color: var(--el-text-color-regular);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+:global(.menu-icon-picker__item:hover),
+:global(.menu-icon-picker__item--selected) {
+  color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+
+:global(.menu-icon-picker__item span) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
