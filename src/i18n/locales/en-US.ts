@@ -38,10 +38,19 @@ export default {
     confirmDelete: "Delete role '{name}'?"
   },
   permission: {
-    addTitle: "Add Permission", editTitle: "Edit Permission", parent: "Parent Permission", root: "Root",
-    type: "Permission Type", directoryType: "Directory", menuType: "Menu", buttonType: "Button",
-    selectIcon: "Select an icon", searchIcon: "Search icons", noMatchingIcon: "No matching icons",
-    currentParent: "Current parent", parentTip: "Click a tree node to select its parent; buttons cannot be parents.",
+    addTitle: "Add Permission", 
+    editTitle: "Edit Permission", 
+    parent: "Parent Permission", 
+    root: "Root",
+    type: "Permission Type", 
+    directoryType: "Directory", 
+    menuType: "Menu", 
+    buttonType: "Button",
+    selectIcon: "Select an icon", 
+    searchIcon: "Search icons", 
+    noMatchingIcon: "No matching icons",
+    currentParent: "Current parent", 
+    parentTip: "Click a tree node to select its parent; buttons cannot be parents.",
     componentTip: "Menus use a path relative to src/views without an extension; directories and buttons leave it empty.",
     confirmDelete: "Delete permission '{name}'?"
   },

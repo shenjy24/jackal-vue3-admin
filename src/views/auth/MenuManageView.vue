@@ -51,9 +51,6 @@ const selectedIconName = computed(() =>
   form.icon && iconComponents[form.icon] ? form.icon : defaultIconName
 );
 const selectedIconComponent = computed(() => iconComponents[selectedIconName.value]);
-const selectedParentName = computed(
-  () => findNodeName(parentOptions.value, form.parentId) || t("permission.root")
-);
 
 function emptyForm(): AuthPermQo {
   return {
@@ -148,20 +145,10 @@ function clearIcon() {
 function buildParentOptions(nodes: AuthMenuVo[], excludedId?: AdminId): AuthMenuVo[] {
   return nodes
     .filter((node) => node.type !== PermType.BUTTON && node.id !== excludedId)
-    .map((node) => ({ ...node, children: buildParentOptions(node.children || [], excludedId) }));
-}
-
-function findNodeName(nodes: AuthMenuVo[], id: AdminId): string | undefined {
-  for (const node of nodes) {
-    if (node.id === id) return node.name;
-    const childName = findNodeName(node.children || [], id);
-    if (childName) return childName;
-  }
-  return undefined;
-}
-
-function selectParentNode(node: AuthMenuVo) {
-  form.parentId = node.id;
+    .map((node) => ({
+      ...node,
+      children: buildParentOptions(node.children || [], excludedId)
+    }));
 }
 
 function filterPermissionTree(nodes: AuthMenuVo[]): AuthMenuVo[] {
@@ -293,23 +280,17 @@ onMounted(loadPermissionTree);
     <el-dialog
       v-model="dialogVisible"
       :title="editingId ? t('permission.editTitle') : t('permission.addTitle')"
-      width="560px"
+      width="640px"
       class="admin-form-dialog"
       :close-on-click-modal="false"
     >
-      <el-form :model="form" label-position="top">
+      <el-form :model="form" label-width="88px" class="permission-form">
         <el-form-item :label="t('permission.type')" required>
           <el-radio-group v-model="form.type">
             <el-radio-button :value="PermType.DIRECTORY">{{ t("permission.directoryType") }}</el-radio-button>
             <el-radio-button :value="PermType.MENU">{{ t("permission.menuType") }}</el-radio-button>
             <el-radio-button :value="PermType.BUTTON">{{ t("permission.buttonType") }}</el-radio-button>
           </el-radio-group>
-        </el-form-item>
-        <el-form-item :label="t('crud.code')">
-          <el-input v-model="form.code" maxlength="128" show-word-limit />
-        </el-form-item>
-        <el-form-item :label="t('crud.name')" required>
-          <el-input v-model="form.name" maxlength="128" show-word-limit />
         </el-form-item>
         <template v-if="form.type !== PermType.BUTTON">
           <el-form-item :label="t('crud.icon')">
@@ -355,38 +336,55 @@ onMounted(loadPermissionTree);
             </el-popover>
           </el-form-item>
         </template>
-        <template v-if="form.type === PermType.MENU">
-          <el-form-item :label="t('crud.path')">
-            <el-input v-model="form.path" maxlength="255" show-word-limit placeholder="/auth/user" />
-          </el-form-item>
-          <el-form-item :label="t('crud.component')">
-            <el-input v-model="form.component" maxlength="255" show-word-limit placeholder="auth/UserManageView" />
-            <div class="form-tip">{{ t("permission.componentTip") }}</div>
-          </el-form-item>
-        </template>
-        <el-form-item :label="t('crud.sort')">
-          <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" />
+        <el-row :gutter="24">
+          <el-col :xs="24" :sm="12">
+            <el-form-item :label="t('crud.name')" required>
+              <el-input v-model="form.name" maxlength="128" />
+            </el-form-item>
+          </el-col>
+          <el-col :xs="24" :sm="12">
+            <el-form-item :label="t('crud.code')">
+              <el-input v-model="form.code" maxlength="128" />
+            </el-form-item>
+          </el-col>
+          <template v-if="form.type === PermType.MENU">
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('crud.path')">
+                <el-input v-model="form.path" maxlength="255" placeholder="/auth/user" />
+              </el-form-item>
+            </el-col>
+            <el-col :xs="24" :sm="12">
+              <el-form-item :label="t('crud.sort')">
+                <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" />
+              </el-form-item>
+            </el-col>
+            <el-col :span="24">
+              <el-form-item :label="t('crud.component')">
+                <el-input v-model="form.component" maxlength="255" placeholder="auth/UserManageView" />
+              </el-form-item>
+            </el-col>
+          </template>
+          <el-col v-else :xs="24" :sm="12">
+            <el-form-item :label="t('crud.sort')">
+              <el-input-number v-model="form.sort" :min="0" :max="9999" controls-position="right" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item :label="t('permission.parent')">
+          <el-tree-select
+            v-model="form.parentId"
+            :data="parentOptions"
+            node-key="id"
+            check-strictly
+            default-expand-all
+            :render-after-expand="false"
+            :teleported="false"
+            :props="{ children: 'children', label: 'name', value: 'id' }"
+            class="permission-parent-select"
+          />
         </el-form-item>
         <el-form-item :label="t('crud.remark')">
-          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="255" show-word-limit />
-        </el-form-item>
-        <el-form-item :label="t('permission.parent')">
-          <div class="permission-parent-box">
-            <div class="permission-parent-current">
-              <span>{{ t("permission.currentParent") }}</span>
-              <el-tag>{{ selectedParentName }}</el-tag>
-            </div>
-            <el-tree
-              :data="parentOptions"
-              :props="treeProps"
-              node-key="id"
-              highlight-current
-              :current-node-key="form.parentId"
-              :expand-on-click-node="false"
-              @node-click="selectParentNode"
-            />
-          </div>
-          <div class="form-tip">{{ t("permission.parentTip") }}</div>
+          <el-input v-model="form.remark" type="textarea" :rows="3" maxlength="255" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -402,34 +400,24 @@ onMounted(loadPermissionTree);
   width: 120px;
 }
 
-.permission-parent-box {
-  width: 100%;
-  max-height: 280px;
-  overflow: auto;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  padding: 10px;
+.permission-form :deep(.el-form-item) {
+  margin-bottom: 18px;
 }
 
-.permission-parent-current {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
+.permission-form :deep(.el-input-number) {
+  width: 100%;
+}
+
+.permission-parent-select {
+  width: 100%;
+}
+
+.permission-parent-select :deep(.el-select__popper) {
+  max-height: 320px;
 }
 
 .menu-icon-input {
   width: 100%;
-}
-
-.form-tip {
-  margin-top: 6px;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  line-height: 1.5;
 }
 
 :global(.menu-icon-picker-popper) {
