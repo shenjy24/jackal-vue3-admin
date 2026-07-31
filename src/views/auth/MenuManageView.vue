@@ -21,6 +21,7 @@ const { t } = useI18n();
 const iconComponents = ElementPlusIconsVue as Record<string, Component>;
 const iconNames = Object.keys(iconComponents).sort();
 const defaultIconName = "Menu";
+const ROOT_PARENT_OPTION_ID = -1;
 const treeProps = { children: "children", label: "name" };
 
 const loading = ref(false);
@@ -35,13 +36,19 @@ const form = reactive<AuthPermQo>(emptyForm());
 
 const parentOptions = computed<AuthMenuVo[]>(() => [
   {
-    id: 0,
-    parentId: 0,
+    id: ROOT_PARENT_OPTION_ID,
+    parentId: ROOT_PARENT_OPTION_ID,
     name: t("permission.root"),
     type: PermType.DIRECTORY,
     children: buildParentOptions(permissionTree.value, editingId.value)
   }
 ]);
+const selectedParentId = computed<AdminId | undefined>({
+  get: () => (form.parentId === 0 ? ROOT_PARENT_OPTION_ID : form.parentId),
+  set: (value) => {
+    form.parentId = value === ROOT_PARENT_OPTION_ID || value === undefined ? 0 : value;
+  }
+});
 const filteredPermissionTree = computed(() => filterPermissionTree(permissionTree.value));
 const filteredIconNames = computed(() => {
   const keyword = iconKeyword.value.trim().toLowerCase();
@@ -57,6 +64,7 @@ function emptyForm(): AuthPermQo {
     parentId: 0,
     code: "",
     name: "",
+    nameEn: "",
     type: PermType.DIRECTORY,
     icon: "",
     path: "",
@@ -121,6 +129,7 @@ async function openEdit(row: AuthMenuVo) {
     parentId: permission.parentId ?? 0,
     code: permission.code || "",
     name: permission.name,
+    nameEn: permission.nameEn || "",
     type: permission.type,
     icon: permission.icon || "",
     path: permission.path || "",
@@ -176,6 +185,7 @@ async function save() {
     parentId: form.parentId,
     code: form.code?.trim() || undefined,
     name: form.name.trim(),
+    nameEn: form.type === PermType.BUTTON ? undefined : form.nameEn?.trim() || undefined,
     type: form.type,
     icon: form.type === PermType.BUTTON ? undefined : form.icon?.trim() || undefined,
     path: form.type === PermType.MENU ? form.path?.trim() || undefined : undefined,
@@ -244,6 +254,7 @@ onMounted(loadPermissionTree);
         :tree-props="treeProps"
       >
         <el-table-column prop="name" :label="t('crud.name')" min-width="160" />
+        <el-table-column prop="nameEn" :label="t('permission.nameEn')" min-width="160" />
         <el-table-column prop="code" :label="t('crud.code')" min-width="180" show-overflow-tooltip />
         <el-table-column :label="t('permission.type')" width="100">
           <template #default="{ row }">
@@ -342,6 +353,11 @@ onMounted(loadPermissionTree);
               <el-input v-model="form.name" maxlength="128" />
             </el-form-item>
           </el-col>
+          <el-col v-if="form.type !== PermType.BUTTON" :xs="24" :sm="12">
+            <el-form-item :label="t('permission.nameEn')">
+              <el-input v-model="form.nameEn" maxlength="128" />
+            </el-form-item>
+          </el-col>
           <el-col :xs="24" :sm="12">
             <el-form-item :label="t('crud.code')">
               <el-input v-model="form.code" maxlength="128" />
@@ -372,14 +388,15 @@ onMounted(loadPermissionTree);
         </el-row>
         <el-form-item :label="t('permission.parent')">
           <el-tree-select
-            v-model="form.parentId"
+            v-model="selectedParentId"
             :data="parentOptions"
             node-key="id"
             check-strictly
             default-expand-all
-            :render-after-expand="false"
+            :render-after-expand="true"
             :teleported="false"
             :props="{ children: 'children', label: 'name', value: 'id' }"
+            :placeholder="t('permission.root')"
             class="permission-parent-select"
           />
         </el-form-item>

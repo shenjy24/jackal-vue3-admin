@@ -2,6 +2,7 @@ import { RouterView, type RouteRecordRaw } from "vue-router";
 import AdminLayout from "@/layouts/AdminLayout.vue";
 import { resolveMenuComponent } from "./componentMap";
 import { PermType, type AuthMenuVo } from "@/types/admin";
+import { i18n } from "@/i18n";
 
 export const ADMIN_ROUTE_NAME = "AdminRoot";
 export const ADMIN_HOME_ROUTE_NAME = "AdminHome";
@@ -28,7 +29,7 @@ export const adminShellRoute: RouteRecordRaw = {
 };
 
 export function menuDisplayTitle(menu: AuthMenuVo) {
-  return menu.name;
+  return i18n.global.locale.value === "en-US" && menu.nameEn?.trim() ? menu.nameEn : menu.name;
 }
 
 export function menusToRoutes(menus: AuthMenuVo[]): RouteRecordRaw[] {
@@ -57,6 +58,7 @@ export function menusToRoutes(menus: AuthMenuVo[]): RouteRecordRaw[] {
           component,
           meta: {
             title: menu.name,
+            titleEn: menu.nameEn,
             icon: menu.icon,
             menuId: menu.id,
             menuCode: menu.code,

@@ -59,6 +59,7 @@ export interface AuthPermVo {
   parentId: AdminId;
   code?: string;
   name: string;
+  nameEn?: string;
   type: PermType;
   icon?: string;
   path?: string;
@@ -72,6 +73,7 @@ export interface AuthMenuVo {
   parentId: AdminId;
   code?: string;
   name: string;
+  nameEn?: string;
   type?: PermType;
   icon?: string;
   path?: string;
@@ -137,6 +139,7 @@ export interface AuthPermQo {
   parentId: AdminId;
   code?: string;
   name: string;
+  nameEn?: string;
   type: PermType;
   icon?: string;
   path?: string;
@@ -147,6 +150,7 @@ export interface AuthPermQo {
 
 export interface AdminRouteMeta {
   title: string;
+  titleEn?: string;
   titleKey?: string;
   icon?: string;
   menuId?: AdminId;

@@ -38,6 +38,7 @@ export default {
     confirmDelete: "Delete role '{name}'?"
   },
   permission: {
+    nameEn: "English name",
     addTitle: "Add Permission", 
     editTitle: "Edit Permission", 
     parent: "Parent Permission", 

@@ -23,8 +23,9 @@ const breadcrumbs = computed(() =>
   )
 );
 
-function routeTitle(title: string, titleKey?: string) {
-  return titleKey ? t(titleKey) : title;
+function routeTitle(title: string, titleKey?: string, titleEn?: string) {
+  if (titleKey) return t(titleKey);
+  return settingsStore.locale === "en-US" && titleEn?.trim() ? titleEn : title;
 }
 
 function tabTitle(title: string) {
@@ -93,7 +94,7 @@ function closeTab(path: string) {
           <el-breadcrumb separator="/">
             <el-breadcrumb-item><RouterLink to="/">{{ t("app.home") }}</RouterLink></el-breadcrumb-item>
             <el-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
-              {{ routeTitle(item.meta.title, item.meta.titleKey) }}
+              {{ routeTitle(item.meta.title, item.meta.titleKey, item.meta.titleEn) }}
             </el-breadcrumb-item>
           </el-breadcrumb>
         </el-header>
