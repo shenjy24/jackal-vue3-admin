@@ -11,6 +11,10 @@ export default {
     login: "Login", account: "Account", password: "Password",
     accountPlaceholder: "Enter account", passwordPlaceholder: "Enter password"
   },
+  home: {
+    greeting: "Hello, {name}", description: "This is your admin workspace. Use the navigation on the left to access the modules available to you.",
+    hint: "Choose a menu item on the left to get started"
+  },
   menu: {
     user: "Admin Users", role: "Roles", permission: "Permissions"
   },

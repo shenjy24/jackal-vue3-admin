@@ -10,6 +10,10 @@ export default {
     login: "登录", account: "账号", password: "密码",
     accountPlaceholder: "请输入账号", passwordPlaceholder: "请输入密码"
   },
+  home: {
+    greeting: "你好，{name}", description: "这是管理后台的工作台。你可以从左侧菜单进入已授权的功能模块。",
+    hint: "请选择左侧菜单开始操作"
+  },
   menu: {
     user: "后台用户管理", role: "角色管理", permission: "权限管理"
   },

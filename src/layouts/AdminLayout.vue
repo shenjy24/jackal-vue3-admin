@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { useRoute, useRouter, RouterView } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ArrowDown, Close } from "@element-plus/icons-vue";
+import { ArrowDown, Close, SwitchButton } from "@element-plus/icons-vue";
 import { ElMessageBox } from "element-plus";
 import AdminMenuItem from "@/components/layout/AdminMenuItem.vue";
 import { useAuthStore } from "@/stores/auth";
@@ -71,8 +71,11 @@ function closeTab(path: string) {
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <span>{{ t("common.welcome") }}，{{ authStore.user?.nickname || authStore.user?.account }}</span>
-        <el-button class="admin-shell__logout" text @click="logout">{{ t("common.logout") }}</el-button>
+        <span class="admin-shell__welcome">{{ t("common.welcome") }}，{{ authStore.user?.nickname || authStore.user?.account }}</span>
+        <el-button class="admin-shell__logout" text @click="logout">
+          <el-icon><SwitchButton /></el-icon>
+          <span>{{ t("common.logout") }}</span>
+        </el-button>
       </div>
     </el-header>
 
