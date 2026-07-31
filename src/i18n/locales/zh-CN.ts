@@ -31,7 +31,7 @@ export default {
     resetPasswordSuccess: "密码重置成功"
   },
   role: {
-    addTitle: "新增角色", editTitle: "编辑角色", permissionTree: "权限树",
+    addTitle: "新增角色", editTitle: "编辑角色", permissionTree: "权限分配",
     selectRoleTip: "请选择左侧角色后分配权限",
     confirmDelete: "确认删除角色“{name}”吗？"
   },

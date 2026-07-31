@@ -7,7 +7,7 @@ export interface ApiResponse<T = unknown> {
 }
 
 export interface JsonPage<T> {
-  total: number;
+  total: number | string;
   content: T[];
 }
 

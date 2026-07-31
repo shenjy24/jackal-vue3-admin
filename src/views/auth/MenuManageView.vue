@@ -70,7 +70,7 @@ async function load() {
       pageSize: pagination.pageSize
     });
     rows.value = page.content;
-    pagination.total = page.total;
+    pagination.total = Number(page.total ?? 0);
   } finally {
     loading.value = false;
   }
@@ -181,7 +181,8 @@ onMounted(load);
       </el-button>
     </div>
 
-    <el-table v-loading="loading" :data="rows" row-key="id">
+    <section class="list-card">
+      <el-table v-loading="loading" :data="rows" row-key="id">
       <el-table-column prop="code" :label="t('crud.code')" min-width="190" />
       <el-table-column prop="name" :label="t('crud.name')" min-width="150" />
       <el-table-column :label="t('permission.type')" width="100">
@@ -205,16 +206,22 @@ onMounted(load);
           </el-button>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
 
-    <el-pagination
-      v-model:current-page="pagination.pageNum"
-      v-model:page-size="pagination.pageSize"
-      layout="total, sizes, prev, pager, next"
-      :total="pagination.total"
-      @current-change="load"
-      @size-change="search"
-    />
+      <div class="list-card__pager">
+        <el-pagination
+          v-model:current-page="pagination.pageNum"
+          v-model:page-size="pagination.pageSize"
+          background
+          :hide-on-single-page="false"
+          layout="total, sizes, prev, pager, next"
+          :page-sizes="[10, 20, 50]"
+          :total="pagination.total"
+          @current-change="load"
+          @size-change="search"
+        />
+      </div>
+    </section>
 
     <CrudDialog
       v-model="dialogVisible"

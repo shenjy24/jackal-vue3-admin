@@ -33,7 +33,7 @@ export default {
     resetPasswordSuccess: "Password reset successfully"
   },
   role: {
-    addTitle: "Add Role", editTitle: "Edit Role", permissionTree: "Permission Tree",
+    addTitle: "Add Role", editTitle: "Edit Role", permissionTree: "Permission Assignment",
     selectRoleTip: "Select a role on the left to assign permissions",
     confirmDelete: "Delete role '{name}'?"
   },

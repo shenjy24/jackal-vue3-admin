@@ -9,6 +9,7 @@ import {
   bindRolePerm,
   deleteAuthRole,
   getAuthRole,
+  listAuthPerm,
   listRolePerm,
   queryAuthRole,
   saveAuthRole,
@@ -60,7 +61,7 @@ async function load() {
       pageSize: pagination.pageSize
     });
     rows.value = page.content;
-    pagination.total = page.total;
+    pagination.total = Number(page.total ?? 0);
   } finally {
     loading.value = false;
   }
@@ -132,6 +133,17 @@ async function selectRole(row?: AuthRoleVo) {
   }
 }
 
+async function loadPermissionTree() {
+  permissionLoading.value = true;
+  try {
+    permissionTree.value = await listAuthPerm();
+    await nextTick();
+    treeRef.value?.setCheckedKeys([]);
+  } finally {
+    permissionLoading.value = false;
+  }
+}
+
 async function savePermissions() {
   if (!selectedRoleId.value || !hasPermission("auth:role:update")) return;
   const selected = [
@@ -156,19 +168,20 @@ async function remove(row: AuthRoleVo) {
   await deleteAuthRole({ id: row.id });
   if (selectedRoleId.value === row.id) {
     selectedRoleId.value = undefined;
-    permissionTree.value = [];
+    await loadPermissionTree();
   }
   ElMessage.success(t("common.deleteSuccess"));
   await load();
 }
 
-onMounted(load);
+onMounted(async () => {
+  await Promise.all([load(), loadPermissionTree()]);
+});
 </script>
 
 <template>
-  <section class="role-manage">
-    <article class="table-surface role-list-surface">
-      <div class="page-toolbar">
+  <section class="table-surface role-manage">
+    <div class="page-toolbar">
         <QueryBar @search="search" @reset="resetFilters">
           <el-form-item :label="t('crud.name')">
             <el-input v-model="filters.name" clearable :placeholder="t('crud.name')" />
@@ -177,16 +190,19 @@ onMounted(load);
         <el-button v-permission="'auth:role:save'" type="primary" :icon="Plus" @click="openCreate">
           {{ t("common.add") }}
         </el-button>
-      </div>
+    </div>
 
-      <el-table
-        v-loading="loading"
-        :data="rows"
-        row-key="id"
-        highlight-current-row
-        :current-row-key="selectedRoleId"
-        @current-change="selectRole"
-      >
+    <section class="role-manage__workspace">
+      <article class="role-list-surface">
+        <section class="list-card">
+        <el-table
+          v-loading="loading"
+          :data="rows"
+          row-key="id"
+          highlight-current-row
+          :current-row-key="selectedRoleId"
+          @current-change="selectRole"
+        >
         <el-table-column prop="name" :label="t('crud.name')" min-width="180" />
         <el-table-column prop="remark" :label="t('crud.remark')" min-width="260" show-overflow-tooltip />
         <el-table-column :label="t('common.actions')" width="180" fixed="right">
@@ -199,19 +215,25 @@ onMounted(load);
             </el-button>
           </template>
         </el-table-column>
-      </el-table>
+        </el-table>
 
-      <el-pagination
-        v-model:current-page="pagination.pageNum"
-        v-model:page-size="pagination.pageSize"
-        layout="total, sizes, prev, pager, next"
-        :total="pagination.total"
-        @current-change="load"
-        @size-change="search"
-      />
-    </article>
+        <div class="list-card__pager">
+          <el-pagination
+            v-model:current-page="pagination.pageNum"
+            v-model:page-size="pagination.pageSize"
+            background
+            :hide-on-single-page="false"
+            layout="total, sizes, prev, pager, next"
+            :page-sizes="[10, 20, 50]"
+            :total="pagination.total"
+            @current-change="load"
+            @size-change="search"
+          />
+        </div>
+        </section>
+      </article>
 
-    <article class="table-surface permission-surface">
+      <article class="permission-surface">
       <div class="permission-header">
         <span>{{ t("role.permissionTree") }}</span>
         <el-button
@@ -224,9 +246,7 @@ onMounted(load);
           {{ t("common.save") }}
         </el-button>
       </div>
-      <el-empty v-if="!selectedRoleId" :description="t('role.selectRoleTip')" />
       <el-tree
-        v-else
         ref="treeRef"
         v-loading="permissionLoading"
         class="permission-tree"
@@ -236,7 +256,8 @@ onMounted(load);
         default-expand-all
         :props="{ children: 'children', label: 'name' }"
       />
-    </article>
+      </article>
+    </section>
 
     <CrudDialog
       v-model="dialogVisible"
@@ -258,8 +279,13 @@ onMounted(load);
 
 <style scoped>
 .role-manage {
+  min-width: 0;
+}
+
+.role-manage__workspace {
   display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  min-height: 560px;
+  grid-template-columns: minmax(0, 7fr) minmax(320px, 4fr);
   gap: 16px;
 }
 
@@ -268,26 +294,55 @@ onMounted(load);
   min-width: 0;
 }
 
+.role-list-surface .list-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.role-list-surface .list-card :deep(.el-table) {
+  flex: 1;
+}
+
+.role-list-surface .list-card :deep(.list-card__pager) {
+  flex-shrink: 0;
+}
+
 .permission-header {
   display: flex;
+  min-height: 64px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  border-bottom: 1px solid #e6edf1;
+  padding: 0 20px;
   font-weight: 600;
 }
 
+.permission-surface {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #dce7ee;
+  border-radius: 10px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(30, 83, 111, 0.05);
+}
+
 .permission-tree {
-  width: 100%;
+  width: auto;
+  flex: 1;
   min-height: 360px;
-  max-height: calc(100vh - 220px);
   overflow: auto;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
+  padding: 12px 20px 20px;
 }
 
 @media (max-width: 960px) {
-  .role-manage {
+  .role-manage__workspace {
     grid-template-columns: 1fr;
+  }
+
+  .permission-surface {
+    min-height: 420px;
   }
 }
 </style>
