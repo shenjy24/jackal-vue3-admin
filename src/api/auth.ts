@@ -6,6 +6,7 @@ import type {
   AuthPermQueryQo,
   AuthPermVo,
   AuthRoleQo,
+  AuthRolePermBindQo,
   AuthRoleQueryQo,
   AuthRoleVo,
   AuthUserPasswordUpdateQo,
@@ -90,6 +91,10 @@ export function updateAuthRole(payload: AuthRoleQo) {
 
 export function deleteAuthRole(payload: IdQo) {
   return post<void, IdQo>(`${ADMIN_AUTH}/deleteAuthRole`, payload);
+}
+
+export function bindRolePerm(payload: AuthRolePermBindQo) {
+  return post<void, AuthRolePermBindQo>(`${ADMIN_AUTH}/bindRolePerm`, payload);
 }
 
 export function getAuthPerm(payload: IdQo) {

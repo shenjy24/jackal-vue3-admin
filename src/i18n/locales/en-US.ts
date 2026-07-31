@@ -34,6 +34,7 @@ export default {
   },
   role: {
     addTitle: "Add Role", editTitle: "Edit Role", permissionTree: "Permission Tree",
+    selectRoleTip: "Select a role on the left to assign permissions",
     confirmDelete: "Delete role '{name}'?"
   },
   permission: {
