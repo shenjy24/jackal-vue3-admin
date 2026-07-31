@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { setLocale, type SupportedLocale } from "@/i18n";
+import { i18n, setLocale, type SupportedLocale } from "@/i18n";
 
 const STORAGE_KEY = "jackal-admin-locale";
 
@@ -12,6 +12,7 @@ export const useSettingsStore = defineStore("settings", {
       this.locale = locale;
       localStorage.setItem(STORAGE_KEY, locale);
       setLocale(locale);
+      document.title = i18n.global.t("app.title");
     }
   }
 });

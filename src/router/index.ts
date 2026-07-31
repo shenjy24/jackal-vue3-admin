@@ -3,7 +3,7 @@ import { API_FORBIDDEN_CODES, API_UNAUTHORIZED_CODES, ApiClientError } from "@/a
 import { useAuthStore } from "@/stores/auth";
 import { useTabsStore } from "@/stores/tabs";
 import { i18n } from "@/i18n";
-import { adminShellRoute, ADMIN_ROUTE_NAME, firstMenuPath, menusToRoutes } from "./dynamic";
+import { adminShellRoute, ADMIN_HOME_ROUTE_NAME, ADMIN_ROUTE_NAME, menusToRoutes } from "./dynamic";
 import { registerDynamicRouteRemover } from "./dynamicRegistry";
 
 const publicRoutes: RouteRecordRaw[] = [
@@ -48,7 +48,7 @@ router.beforeEach(async (to) => {
 
   if (isPublic) {
     if (to.name === "Login" && authStore.sessionReady) {
-      return firstMenuPath(authStore.menus) || "/";
+      return { name: ADMIN_HOME_ROUTE_NAME };
     }
     return true;
   }
@@ -61,7 +61,7 @@ router.beforeEach(async (to) => {
     registerDynamicRoutes();
 
     if (to.name === ADMIN_ROUTE_NAME) {
-      return firstMenuPath(authStore.menus) || { name: "NotFound" };
+      return { name: ADMIN_HOME_ROUTE_NAME };
     }
 
     if (!routesWereReady && to.name === "NotFound") {
@@ -90,8 +90,7 @@ router.beforeEach(async (to) => {
 
 router.afterEach((to) => {
   useTabsStore().addRoute(to);
-  const title = to.meta.titleKey ? i18n.global.t(to.meta.titleKey) : to.meta.title;
-  document.title = `${title || i18n.global.t("app.title")} - ${i18n.global.t("app.title")}`;
+  document.title = i18n.global.t("app.title");
 });
 
 window.addEventListener("admin:api-error", (event) => {

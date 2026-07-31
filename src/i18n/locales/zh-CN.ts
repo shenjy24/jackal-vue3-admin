@@ -1,9 +1,9 @@
 export default {
-  app: { title: "Jackal 管理后台" },
+  app: { title: "Jackal 管理后台", home: "首页" },
   common: {
     add: "新增", edit: "编辑", delete: "删除", search: "查询", reset: "重置", save: "保存",
     cancel: "取消", actions: "操作", logout: "退出登录", confirmLogout: "确认退出当前管理会话吗？",
-    saveSuccess: "保存成功", deleteSuccess: "删除成功", language: "语言",
+    saveSuccess: "保存成功", deleteSuccess: "删除成功", language: "语言", welcome: "欢迎您",
     noPermission: "无权限访问", backHome: "返回首页"
   },
   auth: {

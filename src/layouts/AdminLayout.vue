@@ -2,12 +2,13 @@
 import { computed } from "vue";
 import { useRoute, useRouter, RouterView } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { ArrowDown, Close, Fold, SwitchButton } from "@element-plus/icons-vue";
+import { ArrowDown, Close } from "@element-plus/icons-vue";
 import { ElMessageBox } from "element-plus";
 import AdminMenuItem from "@/components/layout/AdminMenuItem.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useSettingsStore } from "@/stores/settings";
 import { useTabsStore } from "@/stores/tabs";
+import type { SupportedLocale } from "@/i18n";
 
 const route = useRoute();
 const router = useRouter();
@@ -16,7 +17,11 @@ const settingsStore = useSettingsStore();
 const tabsStore = useTabsStore();
 const { t } = useI18n();
 
-const breadcrumbs = computed(() => route.matched.filter((item) => item.meta.title && !item.meta.hidden));
+const breadcrumbs = computed(() =>
+  route.matched.filter(
+    (item) => item.name !== "AdminRoot" && item.name !== "AdminHome" && item.meta.title && !item.meta.hidden
+  )
+);
 
 function routeTitle(title: string, titleKey?: string) {
   return titleKey ? t(titleKey) : title;
@@ -26,7 +31,7 @@ function tabTitle(title: string) {
   return t(title, title);
 }
 
-function switchLocale(locale: "zh-CN" | "en-US") {
+function switchLocale(locale: SupportedLocale) {
   settingsStore.changeLocale(locale);
 }
 
@@ -47,64 +52,70 @@ function closeTab(path: string) {
 </script>
 
 <template>
-  <el-container class="admin-shell">
-    <el-aside class="admin-shell__aside" width="236px">
-      <div class="admin-shell__brand">{{ t("app.title") }}</div>
-      <el-scrollbar>
-        <el-menu :default-active="route.path" router class="admin-menu">
-          <AdminMenuItem v-for="menu in authStore.menus" :key="menu.id" :menu="menu" />
-        </el-menu>
-      </el-scrollbar>
-    </el-aside>
+  <el-container direction="vertical" class="admin-shell">
+    <el-header class="admin-shell__topbar">
+      <div class="admin-shell__brand">
+        <img class="admin-shell__brand-mark" src="/favicon.ico" alt="" />
+        <span>{{ t("app.title") }}</span>
+      </div>
+      <div class="admin-shell__header-right">
+        <el-dropdown @command="switchLocale">
+          <el-button class="admin-shell__locale" text>
+            {{ settingsStore.locale === "zh-CN" ? "中文" : "English" }}
+            <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="zh-CN">中文</el-dropdown-item>
+              <el-dropdown-item command="en-US">English</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <span>{{ t("common.welcome") }}，{{ authStore.user?.nickname || authStore.user?.account }}</span>
+        <el-button class="admin-shell__logout" text @click="logout">{{ t("common.logout") }}</el-button>
+      </div>
+    </el-header>
 
-    <el-container>
-      <el-header class="admin-shell__header">
-        <div class="admin-shell__header-left">
-          <el-button :icon="Fold" text />
+    <el-container class="admin-shell__content">
+      <el-aside class="admin-shell__aside" width="248px">
+        <el-scrollbar>
+          <el-menu :default-active="route.path" router unique-opened class="admin-menu">
+            <AdminMenuItem v-for="menu in authStore.menus" :key="menu.id" :menu="menu" />
+          </el-menu>
+        </el-scrollbar>
+      </el-aside>
+
+      <el-container class="admin-shell__body">
+        <el-header class="admin-shell__header">
           <el-breadcrumb separator="/">
+            <el-breadcrumb-item><RouterLink to="/">{{ t("app.home") }}</RouterLink></el-breadcrumb-item>
             <el-breadcrumb-item v-for="item in breadcrumbs" :key="item.path">
               {{ routeTitle(item.meta.title, item.meta.titleKey) }}
             </el-breadcrumb-item>
           </el-breadcrumb>
-        </div>
-        <div class="admin-shell__header-right">
-          <el-dropdown @command="switchLocale">
-            <el-button text>
-              {{ settingsStore.locale }}
-              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="zh-CN">中文</el-dropdown-item>
-                <el-dropdown-item command="en-US">English</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-          <span class="admin-shell__user">{{ authStore.user?.nickname || authStore.user?.account }}</span>
-          <el-button :icon="SwitchButton" text @click="logout">{{ t("common.logout") }}</el-button>
-        </div>
-      </el-header>
+        </el-header>
 
-      <div class="admin-tabs">
-        <button
-          v-for="tab in tabsStore.visitedTabs"
-          :key="tab.path"
-          class="admin-tabs__item"
-          :class="{ 'is-active': tab.path === route.fullPath }"
-          @click="router.push(tab.path)"
-        >
-          <span>{{ tabTitle(tab.title) }}</span>
-          <el-icon v-if="!tab.keepAlive" @click.stop="closeTab(tab.path)"><Close /></el-icon>
-        </button>
-      </div>
+        <div class="admin-tabs">
+          <button
+            v-for="tab in tabsStore.visitedTabs"
+            :key="tab.path"
+            class="admin-tabs__item"
+            :class="{ 'is-active': tab.path === route.fullPath }"
+            @click="router.push(tab.path)"
+          >
+            <span>{{ tabTitle(tab.title) }}</span>
+            <el-icon v-if="tab.closable" @click.stop="closeTab(tab.path)"><Close /></el-icon>
+          </button>
+        </div>
 
-      <el-main class="admin-shell__main">
-        <RouterView v-slot="{ Component }">
-          <KeepAlive :include="tabsStore.keepAliveNames">
-            <component :is="Component" />
-          </KeepAlive>
-        </RouterView>
-      </el-main>
+        <el-main class="admin-shell__main">
+          <RouterView v-slot="{ Component }">
+            <KeepAlive :include="tabsStore.keepAliveNames">
+              <component :is="Component" />
+            </KeepAlive>
+          </RouterView>
+        </el-main>
+      </el-container>
     </el-container>
   </el-container>
 </template>

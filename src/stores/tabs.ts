@@ -6,6 +6,7 @@ export interface VisitedTab {
   path: string;
   title: string;
   keepAlive: boolean;
+  closable: boolean;
 }
 
 export const useTabsStore = defineStore("tabs", {
@@ -24,7 +25,8 @@ export const useTabsStore = defineStore("tabs", {
         name,
         path: route.fullPath,
         title: route.meta.titleKey || route.meta.title || name,
-        keepAlive: Boolean(route.meta.keepAlive)
+        keepAlive: Boolean(route.meta.keepAlive),
+        closable: !route.meta.affix
       });
     },
     removeTab(path: string) {

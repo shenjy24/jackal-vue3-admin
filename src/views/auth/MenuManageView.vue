@@ -161,27 +161,25 @@ onMounted(load);
 <template>
   <section class="table-surface">
     <div class="page-toolbar">
-      <h1 class="page-title">{{ t("menu.permission") }}</h1>
+      <QueryBar @search="search" @reset="resetFilters">
+        <el-form-item :label="t('crud.code')">
+          <el-input v-model="filters.code" clearable :placeholder="t('crud.code')" />
+        </el-form-item>
+        <el-form-item :label="t('crud.name')">
+          <el-input v-model="filters.name" clearable :placeholder="t('crud.name')" />
+        </el-form-item>
+        <el-form-item :label="t('permission.type')">
+          <el-select v-model="filters.type" clearable :placeholder="t('permission.type')" style="width: 140px">
+            <el-option :label="t('permission.directoryType')" :value="PermType.DIRECTORY" />
+            <el-option :label="t('permission.menuType')" :value="PermType.MENU" />
+            <el-option :label="t('permission.buttonType')" :value="PermType.BUTTON" />
+          </el-select>
+        </el-form-item>
+      </QueryBar>
       <el-button v-permission="'auth:perm:save'" type="primary" :icon="Plus" @click="openCreate">
         {{ t("common.add") }}
       </el-button>
     </div>
-
-    <QueryBar @search="search" @reset="resetFilters">
-      <el-form-item :label="t('crud.code')">
-        <el-input v-model="filters.code" clearable />
-      </el-form-item>
-      <el-form-item :label="t('crud.name')">
-        <el-input v-model="filters.name" clearable />
-      </el-form-item>
-      <el-form-item :label="t('permission.type')">
-        <el-select v-model="filters.type" clearable style="width: 140px">
-          <el-option :label="t('permission.directoryType')" :value="PermType.DIRECTORY" />
-          <el-option :label="t('permission.menuType')" :value="PermType.MENU" />
-          <el-option :label="t('permission.buttonType')" :value="PermType.BUTTON" />
-        </el-select>
-      </el-form-item>
-    </QueryBar>
 
     <el-table v-loading="loading" :data="rows" row-key="id">
       <el-table-column prop="code" :label="t('crud.code')" min-width="190" />

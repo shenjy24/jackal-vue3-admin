@@ -129,17 +129,15 @@ onMounted(load);
 <template>
   <section class="table-surface">
     <div class="page-toolbar">
-      <h1 class="page-title">{{ t("menu.user") }}</h1>
+      <QueryBar @search="search" @reset="resetFilters">
+        <el-form-item :label="t('crud.nickname')">
+          <el-input v-model="filters.nickname" clearable :placeholder="t('crud.nickname')" />
+        </el-form-item>
+      </QueryBar>
       <el-button v-permission="'auth:user:save'" type="primary" :icon="Plus" @click="openCreate">
         {{ t("common.add") }}
       </el-button>
     </div>
-
-    <QueryBar @search="search" @reset="resetFilters">
-      <el-form-item :label="t('crud.nickname')">
-        <el-input v-model="filters.nickname" clearable />
-      </el-form-item>
-    </QueryBar>
 
     <el-table v-loading="loading" :data="rows" row-key="id">
       <el-table-column :label="t('crud.avatar')" width="80">

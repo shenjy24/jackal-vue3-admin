@@ -1,10 +1,10 @@
 export default {
-  app: { title: "Jackal Admin" },
+  app: { title: "Jackal Admin", home: "Home" },
   common: {
     add: "Add", edit: "Edit", delete: "Delete", search: "Search", reset: "Reset", save: "Save",
     cancel: "Cancel", actions: "Actions", logout: "Logout",
     confirmLogout: "Log out of the current admin session?", saveSuccess: "Saved successfully",
-    deleteSuccess: "Deleted successfully", language: "Language",
+    deleteSuccess: "Deleted successfully", language: "Language", welcome: "Welcome",
     noPermission: "No permission", backHome: "Back to Home"
   },
   auth: {

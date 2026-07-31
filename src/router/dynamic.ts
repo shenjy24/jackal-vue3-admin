@@ -1,10 +1,10 @@
 import { RouterView, type RouteRecordRaw } from "vue-router";
 import AdminLayout from "@/layouts/AdminLayout.vue";
-import { i18n } from "@/i18n";
 import { resolveMenuComponent } from "./componentMap";
 import { PermType, type AuthMenuVo } from "@/types/admin";
 
 export const ADMIN_ROUTE_NAME = "AdminRoot";
+export const ADMIN_HOME_ROUTE_NAME = "AdminHome";
 
 export const adminShellRoute: RouteRecordRaw = {
   path: "/",
@@ -13,17 +13,22 @@ export const adminShellRoute: RouteRecordRaw = {
   meta: {
     title: "app.title"
   },
-  children: []
+  children: [
+    {
+      path: "",
+      name: ADMIN_HOME_ROUTE_NAME,
+      component: () => import("@/views/home/HomeView.vue"),
+      meta: {
+        titleKey: "app.home",
+        title: "首页",
+        affix: true
+      }
+    }
+  ]
 };
 
-export function menuTitleKey(menu: AuthMenuVo) {
-  const key = menu.code ? `menuCode.${menu.code}` : "";
-  return key && i18n.global.te(key) ? key : undefined;
-}
-
 export function menuDisplayTitle(menu: AuthMenuVo) {
-  const key = menuTitleKey(menu);
-  return key ? i18n.global.t(key) : menu.name;
+  return menu.name;
 }
 
 export function menusToRoutes(menus: AuthMenuVo[]): RouteRecordRaw[] {
@@ -52,7 +57,6 @@ export function menusToRoutes(menus: AuthMenuVo[]): RouteRecordRaw[] {
           component,
           meta: {
             title: menu.name,
-            titleKey: menuTitleKey(menu),
             icon: menu.icon,
             menuId: menu.id,
             menuCode: menu.code,
