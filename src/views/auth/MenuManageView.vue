@@ -44,9 +44,9 @@ const parentOptions = computed<AuthMenuVo[]>(() => [
   }
 ]);
 const selectedParentId = computed<AdminId | undefined>({
-  get: () => (form.parentId === 0 ? ROOT_PARENT_OPTION_ID : form.parentId),
+  get: () => (Number(form.parentId) === 0 ? ROOT_PARENT_OPTION_ID : Number(form.parentId)),
   set: (value) => {
-    form.parentId = value === ROOT_PARENT_OPTION_ID || value === undefined ? 0 : value;
+    form.parentId = value === ROOT_PARENT_OPTION_ID || value === undefined ? 0 : Number(value);
   }
 });
 const filteredPermissionTree = computed(() => filterPermissionTree(permissionTree.value));
@@ -94,10 +94,19 @@ function iconComponent(name?: string) {
 async function loadPermissionTree() {
   loading.value = true;
   try {
-    permissionTree.value = await listAuthPerm();
+    permissionTree.value = normalizeMenuIds(await listAuthPerm());
   } finally {
     loading.value = false;
   }
+}
+
+function normalizeMenuIds(menus: AuthMenuVo[]): AuthMenuVo[] {
+  return menus.map((menu) => ({
+    ...menu,
+    id: Number(menu.id),
+    parentId: Number(menu.parentId),
+    children: menu.children ? normalizeMenuIds(menu.children) : undefined
+  }));
 }
 
 function search() {
@@ -126,7 +135,7 @@ async function openEdit(row: AuthMenuVo) {
   editingId.value = permission.id;
   Object.assign(form, {
     id: permission.id,
-    parentId: permission.parentId ?? 0,
+    parentId: Number(permission.parentId) || 0,
     code: permission.code || "",
     name: permission.name,
     nameEn: permission.nameEn || "",
