@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onMounted, reactive, ref } from "vue";
+import { computed, nextTick, onMounted, reactive, ref } from "vue";
 import { Plus } from "@element-plus/icons-vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useI18n } from "vue-i18n";
@@ -26,7 +26,12 @@ interface PermissionTreeRef {
   setCheckedKeys: (keys: AdminId[]) => void;
 }
 
-const { t } = useI18n();
+type LocalizedAuthMenuVo = AuthMenuVo & {
+  displayName: string;
+  children?: LocalizedAuthMenuVo[];
+};
+
+const { locale, t } = useI18n();
 const loading = ref(false);
 const submitting = ref(false);
 const permissionLoading = ref(false);
@@ -36,6 +41,17 @@ const editingId = ref<AdminId>();
 const selectedRoleId = ref<AdminId>();
 const rows = ref<AuthRoleVo[]>([]);
 const permissionTree = ref<AuthMenuVo[]>([]);
+const localizedPermissionTree = computed(() => {
+  const useEnglish = locale.value === "en-US";
+  const localize = (nodes: AuthMenuVo[]): LocalizedAuthMenuVo[] =>
+    nodes.map((node) => ({
+      ...node,
+      displayName: useEnglish ? node.nameEn || node.name : node.name,
+      children: node.children ? localize(node.children) : undefined
+    }));
+
+  return localize(permissionTree.value);
+});
 const treeRef = ref<PermissionTreeRef>();
 const filters = reactive({ name: "" });
 const pagination = reactive({ pageNum: 1, pageSize: 20, total: 0 });
@@ -250,11 +266,11 @@ onMounted(async () => {
         ref="treeRef"
         v-loading="permissionLoading"
         class="permission-tree"
-        :data="permissionTree"
+        :data="localizedPermissionTree"
         node-key="id"
         show-checkbox
         default-expand-all
-        :props="{ children: 'children', label: 'name' }"
+        :props="{ children: 'children', label: 'displayName' }"
       />
       </article>
     </section>

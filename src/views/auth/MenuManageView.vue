@@ -17,7 +17,12 @@ import { PermType, type AdminId, type AuthMenuVo, type AuthPermQo } from "@/type
 
 defineOptions({ name: "MenuManageView" });
 
-const { t } = useI18n();
+type LocalizedAuthMenuVo = AuthMenuVo & {
+  displayName: string;
+  children?: LocalizedAuthMenuVo[];
+};
+
+const { locale, t } = useI18n();
 const iconComponents = ElementPlusIconsVue as Record<string, Component>;
 const iconNames = Object.keys(iconComponents).sort();
 const defaultIconName = "Menu";
@@ -34,11 +39,12 @@ const filters = reactive<{ code: string; name: string; type?: PermType }>({ code
 const iconKeyword = ref("");
 const form = reactive<AuthPermQo>(emptyForm());
 
-const parentOptions = computed<AuthMenuVo[]>(() => [
+const parentOptions = computed<LocalizedAuthMenuVo[]>(() => [
   {
     id: ROOT_PARENT_OPTION_ID,
     parentId: ROOT_PARENT_OPTION_ID,
     name: t("permission.root"),
+    displayName: t("permission.root"),
     type: PermType.DIRECTORY,
     children: buildParentOptions(permissionTree.value, editingId.value)
   }
@@ -160,11 +166,13 @@ function clearIcon() {
   form.icon = "";
 }
 
-function buildParentOptions(nodes: AuthMenuVo[], excludedId?: AdminId): AuthMenuVo[] {
+function buildParentOptions(nodes: AuthMenuVo[], excludedId?: AdminId): LocalizedAuthMenuVo[] {
+  const useEnglish = locale.value === "en-US";
   return nodes
     .filter((node) => node.type !== PermType.BUTTON && node.id !== excludedId)
     .map((node) => ({
       ...node,
+      displayName: useEnglish ? node.nameEn || node.name : node.name,
       children: buildParentOptions(node.children || [], excludedId)
     }));
 }
@@ -404,7 +412,7 @@ onMounted(loadPermissionTree);
             default-expand-all
             :render-after-expand="true"
             :teleported="false"
-            :props="{ children: 'children', label: 'name', value: 'id' }"
+            :props="{ children: 'children', label: 'displayName', value: 'id' }"
             :placeholder="t('permission.root')"
             class="permission-parent-select"
           />
